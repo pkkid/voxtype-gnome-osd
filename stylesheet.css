@@ -46,3 +46,12 @@
 .voxtype-indicator-transcribing {
     color: #f2cc4d;
 }
+
+.voxtype-pill-positioning {
+    border-color: #62a0ea;
+    border-style: dashed;
+}
+
+.voxtype-pill-positioning .voxtype-pill-icon {
+    color: #62a0ea;
+}

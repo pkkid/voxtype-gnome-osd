@@ -12,5 +12,7 @@ rm -rf "${TARGET_DIR}"
 mkdir -p "${TARGET_DIR}"
 cp build/*.js "${TARGET_DIR}/"
 cp metadata.json stylesheet.css "${TARGET_DIR}/"
+cp -r schemas "${TARGET_DIR}/"
+glib-compile-schemas "${TARGET_DIR}/schemas"
 
 echo "installed ${UUID} -> ${TARGET_DIR}"
