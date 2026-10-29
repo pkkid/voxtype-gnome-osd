@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stand-in for voxtype in the shell tests: records the call and answers from the fixtures.
+echo "voxtype $*" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
+FIXTURES="$(dirname "$(readlink -f "$0")")/../fixtures"
+case "$*" in
+    "config schema --json") cat "$FIXTURES/voxtype-schema.json" ;;
+    "info devices --json") cat "$FIXTURES/voxtype-devices.json" ;;
+esac

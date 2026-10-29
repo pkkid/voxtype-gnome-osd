@@ -1,0 +1,182 @@
+{
+  "config_path": "/tmp/voxtype-osd-shell-test/config.toml",
+  "keys": [
+    {
+      "compiled": true,
+      "description": "Load the model when recording starts and unload at idle, trading first-keystroke latency for memory.",
+      "engine": "parakeet",
+      "file_value": null,
+      "key": "parakeet.on_demand_loading",
+      "label": "Load on demand",
+      "restart_required": true,
+      "section": "Engine",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Capture device name, or default to follow the system default.",
+      "engine": null,
+      "file_value": "default",
+      "key": "audio.device",
+      "label": "Input device",
+      "restart_required": true,
+      "section": "Audio",
+      "source": "devices",
+      "type": "dynamic_enum",
+      "value": "default"
+    },
+    {
+      "compiled": true,
+      "description": "Safety cap in seconds; recording stops on its own at this point.",
+      "engine": null,
+      "file_value": 300,
+      "key": "audio.max_duration_secs",
+      "label": "Max recording length",
+      "max": 3600,
+      "min": 5,
+      "restart_required": true,
+      "section": "Audio",
+      "type": "int",
+      "value": 300
+    },
+    {
+      "compiled": true,
+      "description": "Pause MPRIS players when recording starts and resume when it stops.",
+      "engine": null,
+      "file_value": null,
+      "key": "audio.pause_media",
+      "label": "Pause media while recording",
+      "restart_required": true,
+      "section": "Audio",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Lower other streams' volume instead of pausing them.",
+      "engine": null,
+      "file_value": null,
+      "key": "audio.duck_media",
+      "label": "Duck media while recording",
+      "restart_required": true,
+      "section": "Audio",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Play a start and stop sound around each recording.",
+      "engine": null,
+      "file_value": false,
+      "key": "audio.feedback.enabled",
+      "label": "Sound cues",
+      "restart_required": true,
+      "section": "Audio",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "choices": [
+        "type",
+        "clipboard",
+        "paste",
+        "file"
+      ],
+      "compiled": true,
+      "description": "type simulates keystrokes, clipboard copies, paste copies then presses the paste keys, file appends to output.file_path.",
+      "engine": null,
+      "file_value": "type",
+      "key": "output.mode",
+      "label": "Delivery mode",
+      "restart_required": true,
+      "section": "Output",
+      "type": "enum",
+      "value": "type"
+    },
+    {
+      "compiled": true,
+      "description": "Copy the text instead of dropping it when every typing driver fails.",
+      "engine": null,
+      "file_value": true,
+      "key": "output.fallback_to_clipboard",
+      "label": "Fall back to clipboard",
+      "restart_required": true,
+      "section": "Output",
+      "type": "bool",
+      "value": true
+    },
+    {
+      "compiled": true,
+      "description": "Send Return once the transcription has been typed.",
+      "engine": null,
+      "file_value": null,
+      "key": "output.auto_submit",
+      "label": "Press Enter after typing",
+      "restart_required": true,
+      "section": "Output",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Post a desktop notification when recording begins.",
+      "engine": null,
+      "file_value": false,
+      "key": "output.notification.on_recording_start",
+      "label": "Notify on record start",
+      "restart_required": true,
+      "section": "Notifications",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Post a desktop notification when recording ends and transcription starts.",
+      "engine": null,
+      "file_value": false,
+      "key": "output.notification.on_recording_stop",
+      "label": "Notify on record stop",
+      "restart_required": true,
+      "section": "Notifications",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
+      "description": "Post the transcribed text as a notification when it completes.",
+      "engine": null,
+      "file_value": true,
+      "key": "output.notification.on_transcription",
+      "label": "Notify with the text",
+      "restart_required": true,
+      "section": "Notifications",
+      "type": "bool",
+      "value": true
+    },
+    {
+      "compiled": true,
+      "description": "Post a notification when voice activity detection finds no speech and the recording is discarded.",
+      "engine": null,
+      "file_value": null,
+      "key": "output.notification.on_no_speech",
+      "label": "Notify when no speech is heard",
+      "restart_required": true,
+      "section": "Notifications",
+      "type": "bool",
+      "value": true
+    },
+    {
+      "compiled": true,
+      "description": "Emit text while you speak instead of after you release the key. Forces toggle activation.",
+      "engine": "parakeet",
+      "file_value": true,
+      "key": "parakeet.streaming",
+      "label": "Streaming transcription",
+      "restart_required": true,
+      "section": "Advanced",
+      "type": "bool",
+      "value": true
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+[
+  { "name": "default", "default": true },
+  { "name": "pipewire", "default": false }
+]

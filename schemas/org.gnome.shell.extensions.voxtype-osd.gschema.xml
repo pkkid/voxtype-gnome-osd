@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.voxtype-osd" path="/org/gnome/shell/extensions/voxtype-osd/">
+    <key name="left-click-toggles" type="b">
+      <default>true</default>
+      <summary>Left click starts and stops dictation</summary>
+      <description>When false, left click opens the menu like right click does.</description>
+    </key>
+    <key name="show-when-stopped" type="b">
+      <default>true</default>
+      <summary>Keep the panel icon visible while the voxtype service is stopped</summary>
+    </key>
+    <key name="show-pill" type="b">
+      <default>true</default>
+      <summary>Show the on-screen recording indicator</summary>
+    </key>
+    <key name="pill-style" type="s">
+      <choices>
+        <choice value="classic"/>
+        <choice value="minimal"/>
+        <choice value="wave"/>
+        <choice value="osd"/>
+      </choices>
+      <default>'classic'</default>
+      <summary>Look of the on-screen recording indicator</summary>
+    </key>
+    <key name="show-waveform" type="b">
+      <default>true</default>
+      <summary>Draw a live waveform inside the recording indicator</summary>
+    </key>
+    <key name="accent-color" type="s">
+      <default>'#f2594d'</default>
+      <summary>Accent color of the indicators, as #rrggbb</summary>
+      <description>Used for the recording indicator's waveform and Classic border, and the panel icon while dictating or transcribing.</description>
+    </key>
+    <key name="pill-x" type="d">
+      <range min="0" max="1"/>
+      <default>0.5</default>
+      <summary>Horizontal indicator position, as a fraction of the free space on the primary monitor</summary>
+    </key>
+    <key name="pill-y" type="d">
+      <range min="0" max="1"/>
+      <default>0.84</default>
+      <summary>Vertical indicator position, as a fraction of the free space on the primary monitor</summary>
+    </key>
+  </schema>
+</schemalist>

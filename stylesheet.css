@@ -1,48 +1,124 @@
+/* ───── Recording indicator: shared ───── */
+
 .voxtype-pill {
-    background-color: rgba(26, 26, 31, 0.85);
-    border: 2px solid rgba(235, 235, 242, 0.35);
-    border-radius: 12px;
-    padding: 0 14px;
-    spacing: 10px;
+    background-color: rgba(26, 26, 31, 0.92);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-}
-
-.voxtype-pill-recording {
-    border-color: #f2594d;
-}
-
-.voxtype-pill-transcribing {
-    border-color: #f2cc4d;
 }
 
 .voxtype-pill-icon {
     icon-size: 24px;
-    color: rgba(235, 235, 242, 0.9);
+    color: #ebebf2;
 }
 
-.voxtype-pill-recording .voxtype-pill-icon {
-    color: #f2594d;
+/* The status dot on the microphone. The ring matches the pill so the dot looks cut into the icon. */
+.voxtype-pill-badge {
+    width: 7px;
+    height: 7px;
+    border: 2px solid #1d1d22;
+    border-radius: 6px;
+    background-color: #ed333b;
 }
 
-.voxtype-pill-transcribing .voxtype-pill-icon {
-    color: #f2cc4d;
+.voxtype-pill-stack {
+    spacing: 5px;
 }
 
 .voxtype-pill-label {
-    color: #ebebf2;
+    color: #ffffff;
     font-size: 13px;
-    min-width: 110px;
+    font-weight: bold;
 }
 
-.voxtype-waveform {
-    min-width: 180px;
-    min-height: 32px;
+/* ───── Classic ───── */
+
+.voxtype-pill-classic {
+    border: 2px solid #f2594d;
+    border-radius: 12px;
+    padding: 0 16px;
+    spacing: 14px;
 }
 
-.voxtype-indicator-recording {
-    color: #f2594d;
+.voxtype-pill-classic .voxtype-waveform {
+    height: 28px;
 }
 
+/* ───── Minimal ───── */
+
+.voxtype-pill-minimal {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 0 11px;
+    spacing: 9px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+.voxtype-pill-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: #ed333b;
+}
+
+.voxtype-pill-minimal .voxtype-waveform {
+    width: 54px;
+    height: 16px;
+}
+
+/* ───── Wave ───── */
+
+.voxtype-pill-wave {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 36px;
+    padding: 0 22px 0 20px;
+    spacing: 14px;
+}
+
+.voxtype-pill-wave .voxtype-pill-icon {
+    icon-size: 22px;
+}
+
+.voxtype-pill-wave .voxtype-pill-stack {
+    spacing: 2px;
+}
+
+.voxtype-pill-wave .voxtype-waveform {
+    height: 32px;
+}
+
+/* ───── GNOME OSD: modelled on the shell's own volume popup ───── */
+
+.voxtype-pill-osd {
+    background-color: rgba(40, 40, 44, 0.96);
+    border: 1px solid transparent;
+    border-radius: 31px;
+    padding: 0 22px 0 20px;
+    spacing: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.voxtype-pill-osd .voxtype-pill-icon {
+    icon-size: 26px;
+}
+
+.voxtype-pill-osd .voxtype-pill-badge {
+    border-color: #28282c;
+}
+
+.voxtype-pill-osd .voxtype-pill-stack {
+    spacing: 4px;
+}
+
+.voxtype-pill-osd .voxtype-pill-label {
+    font-size: 14px;
+}
+
+.voxtype-pill-osd .voxtype-waveform {
+    height: 18px;
+}
+
+/* ───── Panel icon. The accent color setting overrides these with an inline style. ───── */
+
+.voxtype-indicator-recording,
 .voxtype-indicator-transcribing {
-    color: #f2cc4d;
+    color: #f2594d;
 }

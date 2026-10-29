@@ -1,0 +1,6 @@
+{
+  "uuid": "test-helper@voxtype-osd",
+  "name": "Voxtype OSD test helper",
+  "description": "Only loaded by the shell tests.",
+  "shell-version": ["50", "51"]
+}
