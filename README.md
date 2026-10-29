@@ -22,9 +22,11 @@ panel menu to control the voxtype service, and a settings window.
   already the case while you speak. The waveform and Classic border use the accent color. Drag the
   indicator to move it; the position is remembered. "Move recording indicator" shows it for 20
   seconds so it can be moved without recording.
-- **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
-  - **General:** run voxtype now / at login, the dictation shortcut, left-click behaviour, what the
-    indicators show, their style and their accent color.
+- **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`), with its pages in a sidebar:
+  - **General:** run voxtype now / at login, the dictation shortcut, and the panel icon's left-click
+    behaviour and visibility while voxtype is stopped.
+  - **Indicator:** show or hide the recording indicator, pick its style from preview cards, the
+    waveform, the accent color, and resetting its position.
   - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device,
     max recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
     descriptions, types and ranges come from `voxtype config schema --json`; changes are written with

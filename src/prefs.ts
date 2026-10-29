@@ -7,6 +7,8 @@ import Gtk from 'gi://Gtk';
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import { accentColor, parseHexColor, rgbToHex } from './color.js';
+import { setSidebarContent, showToast } from './prefsWindow.js';
+import { buildStylePickerGroup } from './stylePicker.js';
 import {
     isServiceActive,
     isServiceEnabled,
@@ -23,13 +25,6 @@ const TOGGLE_COMMAND = 'voxtype record toggle';
 const SERVICE_POLL_SECS = 2;
 const NUMBER_APPLY_DELAY_MS = 600;
 const DEFAULT_CHOICE = 'Default';
-
-const INDICATOR_STYLES: { value: string; label: string }[] = [
-    { value: 'classic', label: 'Classic' },
-    { value: 'minimal', label: 'Minimal' },
-    { value: 'wave', label: 'Wave' },
-    { value: 'osd', label: 'GNOME OSD' },
-];
 
 // The voxtype settings shown on the Voxtype page. Labels, descriptions, types and ranges come from
 // `voxtype config schema --json`, so only the key names live here. Keys this voxtype build does not
@@ -87,20 +82,26 @@ type AudioDevice = {
 export default class VoxtypeOsdPreferences extends ExtensionPreferences {
     async fillPreferencesWindow(window: Adw.PreferencesWindow): Promise<void> {
         const settings = this.getSettings();
-        window.set_default_size(680, 780);
-        window.search_enabled = true;
-
-        window.add(buildGeneralPage(window, settings));
+        window.set_default_size(880, 800);
 
         const voxtypePage = new Adw.PreferencesPage({
             name: 'voxtype',
             title: 'Voxtype',
             icon_name: 'audio-input-microphone-symbolic',
         });
-        window.add(voxtypePage);
         fillVoxtypePage(window, voxtypePage).catch(error => {
             logError(error as Error, 'voxtype-osd: could not build the Voxtype page');
         });
+
+        setSidebarContent(window, {
+            title: this.metadata.name,
+            subtitle: 'Settings',
+            iconName: 'audio-input-microphone-symbolic',
+        }, [
+            buildGeneralPage(window, settings),
+            buildIndicatorPage(settings),
+            voxtypePage,
+        ]);
     }
 }
 
@@ -114,8 +115,8 @@ function buildGeneralPage(window: Adw.PreferencesWindow, settings: Gio.Settings)
     });
 
     page.add(buildServiceGroup(window));
-    page.add(buildShortcutGroup(window, settings));
-    page.add(buildIndicatorGroup(settings));
+    page.add(buildShortcutGroup(window));
+    page.add(buildPanelIconGroup(settings));
 
     return page;
 }
@@ -180,7 +181,7 @@ function buildServiceGroup(window: Adw.PreferencesWindow): Adw.PreferencesGroup 
     return group;
 }
 
-function buildShortcutGroup(window: Adw.PreferencesWindow, settings: Gio.Settings): Adw.PreferencesGroup {
+function buildShortcutGroup(window: Adw.PreferencesWindow): Adw.PreferencesGroup {
     const group = new Adw.PreferencesGroup({ title: 'Shortcut' });
 
     const shortcutLabel = new Gtk.ShortcutLabel({
@@ -202,53 +203,18 @@ function buildShortcutGroup(window: Adw.PreferencesWindow, settings: Gio.Setting
     });
     group.add(shortcutRow);
 
+    return group;
+}
+
+function buildPanelIconGroup(settings: Gio.Settings): Adw.PreferencesGroup {
+    const group = new Adw.PreferencesGroup({ title: 'Panel icon' });
+
     const leftClickRow = new Adw.SwitchRow({
         title: 'Left-click the panel icon to dictate',
         subtitle: 'Right-click always opens the menu.',
     });
     settings.bind('left-click-toggles', leftClickRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     group.add(leftClickRow);
-
-    return group;
-}
-
-function buildIndicatorGroup(settings: Gio.Settings): Adw.PreferencesGroup {
-    const group = new Adw.PreferencesGroup({ title: 'Indicators' });
-
-    const pillRow = new Adw.SwitchRow({
-        title: 'Show recording indicator',
-        subtitle: 'The on-screen box shown while you dictate.',
-    });
-    settings.bind('show-pill', pillRow, 'active', Gio.SettingsBindFlags.DEFAULT);
-    group.add(pillRow);
-
-    const styleRow = buildStyleRow(settings);
-    pillRow.bind_property('active', styleRow, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
-    group.add(styleRow);
-
-    const waveformRow = new Adw.SwitchRow({
-        title: 'Show waveform',
-    });
-    settings.bind('show-waveform', waveformRow, 'active', Gio.SettingsBindFlags.DEFAULT);
-    pillRow.bind_property('active', waveformRow, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
-    group.add(waveformRow);
-
-    group.add(buildAccentColorRow(settings));
-
-    const resetButton = new Gtk.Button({
-        label: 'Reset',
-        valign: Gtk.Align.CENTER,
-    });
-    resetButton.connect('clicked', () => {
-        settings.reset('pill-x');
-        settings.reset('pill-y');
-    });
-    const positionRow = new Adw.ActionRow({
-        title: 'Indicator position',
-        subtitle: 'Drag the indicator while it is showing, or choose "Move recording indicator" from the panel menu.',
-    });
-    positionRow.add_suffix(resetButton);
-    group.add(positionRow);
 
     const stoppedRow = new Adw.SwitchRow({
         title: 'Keep panel icon while Voxtype is stopped',
@@ -260,31 +226,57 @@ function buildIndicatorGroup(settings: Gio.Settings): Adw.PreferencesGroup {
     return group;
 }
 
-function buildStyleRow(settings: Gio.Settings): Adw.ComboRow {
-    const row = new Adw.ComboRow({
-        title: 'Style',
-        subtitle: 'Classic box, a small minimal capsule, a smooth wave, or a match for GNOME\'s volume popup.',
-        model: Gtk.StringList.new(INDICATOR_STYLES.map(style => style.label)),
+// ───────────────────────── Indicator page ─────────────────────────
+
+function buildIndicatorPage(settings: Gio.Settings): Adw.PreferencesPage {
+    const page = new Adw.PreferencesPage({
+        name: 'indicator',
+        title: 'Indicator',
+        icon_name: 'preferences-desktop-appearance-symbolic',
     });
 
-    const syncRow = () => {
-        const index = INDICATOR_STYLES.findIndex(style => style.value === settings.get_string('pill-style'));
-        if (row.selected !== Math.max(0, index)) {
-            row.selected = Math.max(0, index);
-        }
-    };
-
-    row.connect('notify::selected', () => {
-        const value = INDICATOR_STYLES[row.selected]?.value;
-        if (value !== undefined && value !== settings.get_string('pill-style')) {
-            settings.set_string('pill-style', value);
-        }
+    const showGroup = new Adw.PreferencesGroup();
+    const pillRow = new Adw.SwitchRow({
+        title: 'Show recording indicator',
+        subtitle: 'The on-screen indicator shown while you dictate.',
     });
-    const changedId = settings.connect('changed::pill-style', syncRow);
-    row.connect('destroy', () => settings.disconnect(changedId));
-    syncRow();
+    settings.bind('show-pill', pillRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    showGroup.add(pillRow);
+    page.add(showGroup);
 
-    return row;
+    const styleGroup = buildStylePickerGroup(settings, 'pill-style');
+    pillRow.bind_property('active', styleGroup, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
+    page.add(styleGroup);
+
+    const lookGroup = new Adw.PreferencesGroup({ title: 'Appearance' });
+    pillRow.bind_property('active', lookGroup, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
+    page.add(lookGroup);
+
+    const waveformRow = new Adw.SwitchRow({
+        title: 'Show waveform',
+        subtitle: 'Bars or waves that follow your voice.',
+    });
+    settings.bind('show-waveform', waveformRow, 'active', Gio.SettingsBindFlags.DEFAULT);
+    lookGroup.add(waveformRow);
+
+    lookGroup.add(buildAccentColorRow(settings));
+
+    const resetButton = new Gtk.Button({
+        label: 'Reset',
+        valign: Gtk.Align.CENTER,
+    });
+    resetButton.connect('clicked', () => {
+        settings.reset('pill-x');
+        settings.reset('pill-y');
+    });
+    const positionRow = new Adw.ActionRow({
+        title: 'Position',
+        subtitle: 'Drag the indicator while it is showing, or choose "Move recording indicator" from the panel menu.',
+    });
+    positionRow.add_suffix(resetButton);
+    lookGroup.add(positionRow);
+
+    return page;
 }
 
 function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
@@ -639,5 +631,5 @@ function firstLine(text: string): string {
 }
 
 function toast(window: Adw.PreferencesWindow, title: string): void {
-    window.add_toast(new Adw.Toast({ title, timeout: 4 }));
+    showToast(window, title);
 }
