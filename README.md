@@ -6,31 +6,38 @@ panel menu to control the voxtype service, and a settings window.
 
 ## Features
 
-- **Panel icon:** the accent color (red by default) while dictating or transcribing, a dimmed
-  crossed-out microphone while the voxtype service is stopped.
-  - Left click starts and stops dictation (can be turned off in settings).
-  - Right click opens a menu: current status, start/stop dictation, a switch for the voxtype service,
-    "Move recording indicator" and Settings.
-- **Recording indicator:** an on-screen pill that follows your voice, in one of four styles:
-  - **Classic:** a box with the status above a row of bars that steps left ten times a second.
-  - **Minimal:** a small capsule with just the status dot and a tiny equalizer.
-  - **Wave:** a rounded pill with layered sine ribbons whose height follows your voice.
-  - **GNOME OSD:** shaped like GNOME's own volume popup, with an equalizer in place of the slider.
+**Recording indicator:** an on-screen pill that follows your voice while you dictate, in one of four
+styles. A red dot on the microphone means it is live. It reads "Recording…" while recording and
+"Transcribing…" while voxtype transcribes, which with live dictation (`[parakeet] streaming`) is
+already the case while you speak. Drag it to move it; the position is remembered.
 
-  A red dot on the microphone means it is live. The label reads "Recording…" while recording, and
-  "Transcribing…" while voxtype transcribes, which with live dictation (`[parakeet] streaming`) is
-  already the case while you speak. The waveform and Classic border use the accent color. Drag the
-  indicator to move it; the position is remembered. "Move recording indicator" shows it for 20
-  seconds so it can be moved without recording.
-- **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`), with its pages in a sidebar:
-  - **General:** run voxtype now / at login, the dictation shortcut, and the panel icon's left-click
-    behaviour and visibility while voxtype is stopped.
-  - **Indicator:** show or hide the recording indicator, pick its style from preview cards, the
-    waveform, the accent color, and resetting its position.
-  - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device,
-    max recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
-    descriptions, types and ranges come from `voxtype config schema --json`; changes are written with
-    `voxtype config set`, and a banner offers to restart voxtype when a change needs it.
+| Classic | Minimal |
+| :-: | :-: |
+| ![Classic style](docs/images/style-classic.png) | ![Minimal style](docs/images/style-minimal.png) |
+| **Wave** | **GNOME OSD** |
+| ![Wave style](docs/images/style-wave.png) | ![GNOME OSD style](docs/images/style-osd.png) |
+
+<img src="docs/images/panel-menu.png" align="right" width="250" alt="Panel menu">
+
+**Panel icon:** the accent color while dictating or transcribing, and a dimmed crossed-out microphone
+while the voxtype service is stopped. Left click starts and stops dictation (can be turned off). Right
+click opens a menu with the current status, start/stop dictation, a switch for the voxtype service,
+"Move recording indicator" (shows the indicator for 20 seconds so it can be dragged) and Settings.
+
+<br clear="right">
+
+**Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
+
+- **General:** run voxtype now / at login, the dictation shortcut, and how the panel icon behaves.
+- **Indicator:** show or hide the indicator, its style, the waveform, the accent color and its position.
+- **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device, max
+  recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
+  descriptions, types and ranges come from `voxtype config schema --json`; changes are written with
+  `voxtype config set`, and a banner offers to restart voxtype when a change needs it.
+
+<p align="center">
+  <img src="docs/images/settings-indicator.png" width="620" alt="Indicator settings">
+</p>
 
 ## How it works
 
