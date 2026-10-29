@@ -3,7 +3,6 @@ export type AudioSample = {
 };
 
 export const WAVEFORM_GAIN = 10;
-export const RING_CAPACITY = 300;
 
 function clampToUnit(value: number): number {
     if (value < 0) {
@@ -44,51 +43,81 @@ export function parseBridgeLine(line: string): AudioSample | null {
     return { peak: clampToUnit(fields.peak) };
 }
 
-function smoothNeighbours(values: number[]): number[] {
-    return values.map((value, index) => {
-        let total = value;
-        let count = 1;
+// Smoothing for the overall level: rise quickly with the voice, fall back slowly.
+const LEVEL_ATTACK = 0.45;
+const LEVEL_DECAY = 0.08;
+const RECENT_CAPACITY = 32;
 
-        if (index > 0) {
-            total += values[index - 1];
-            count += 1;
-        }
-        if (index < values.length - 1) {
-            total += values[index + 1];
-            count += 1;
-        }
+export const STEP_CAPACITY = 120;
 
-        return total / count;
-    });
-}
+// Collects the bridge's peaks for the indicator styles. step() turns everything heard since the
+// previous step into one bar, so the Classic bars jump left a whole slot at a time; level is a
+// smoothed loudness for the styles that react to the voice as a whole.
+export class LevelHistory {
+    private readonly steps: number[];
+    private readonly recentPeaks: number[] = [];
+    private pending = 0;
+    private smoothed = 0;
 
-export class SampleRing {
-    private readonly capacity: number;
-    private readonly heights: number[];
-    private writeIndex = 0;
+    constructor(capacity: number = STEP_CAPACITY) {
+        this.steps = new Array<number>(capacity).fill(0);
+    }
 
-    constructor(capacity: number = RING_CAPACITY) {
-        this.capacity = capacity;
-        this.heights = new Array<number>(capacity).fill(0);
+    get level(): number {
+        return this.smoothed;
     }
 
     push(sample: AudioSample): void {
-        this.heights[this.writeIndex] = clampToUnit(sample.peak * WAVEFORM_GAIN);
-        this.writeIndex = (this.writeIndex + 1) % this.capacity;
+        const height = clampToUnit(sample.peak * WAVEFORM_GAIN);
+
+        this.pending = Math.max(this.pending, height);
+        this.smoothed += (height - this.smoothed) * (height > this.smoothed ? LEVEL_ATTACK : LEVEL_DECAY);
+
+        this.recentPeaks.push(height);
+        if (this.recentPeaks.length > RECENT_CAPACITY) {
+            this.recentPeaks.shift();
+        }
+    }
+
+    step(): void {
+        this.steps.push(this.pending);
+        this.steps.shift();
+        this.pending = 0;
+    }
+
+    // Oldest first, newest at the end.
+    bars(): number[] {
+        return [...this.steps];
+    }
+
+    // The last `count` peaks, newest at the end, padded with silence.
+    recent(count: number): number[] {
+        const padding = new Array<number>(Math.max(0, count - this.recentPeaks.length)).fill(0);
+        return [...padding, ...this.recentPeaks.slice(-count)];
     }
 
     clear(): void {
-        this.heights.fill(0);
-        this.writeIndex = 0;
+        this.steps.fill(0);
+        this.recentPeaks.length = 0;
+        this.pending = 0;
+        this.smoothed = 0;
     }
+}
 
-    columns(): number[] {
-        const chronological: number[] = [];
+// Bar heights for the small equalizers: the middle bars stand taller, and each bar follows a
+// different recent peak so the row flickers with the voice instead of moving in lockstep.
+export function equalizerHeights(recent: number[], level: number, bars: number): number[] {
+    const middle = (bars - 1) / 2;
 
-        for (let offset = 0; offset < this.capacity; offset += 1) {
-            chronological.push(this.heights[(this.writeIndex + offset) % this.capacity]);
-        }
+    return Array.from({ length: bars }, (_, index) => {
+        const spread = middle === 0 ? 0 : Math.abs(index - middle) / middle;
+        const weight = 1 - 0.6 * spread * spread;
+        const peak = recent.length === 0 ? 0 : recent[recent.length - 1 - ((index * 7) % recent.length)];
+        return clampToUnit((0.4 * level + 0.6 * peak) * weight * 1.3);
+    });
+}
 
-        return smoothNeighbours(chronological);
-    }
+// A wave travelling left to right across the bars, shown while voxtype transcribes.
+export function rippleHeights(bars: number, phase: number): number[] {
+    return Array.from({ length: bars }, (_, index) => 0.2 + 0.3 * Math.max(0, Math.sin(phase - index * 0.6)));
 }

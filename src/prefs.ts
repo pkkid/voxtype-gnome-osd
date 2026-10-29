@@ -24,6 +24,13 @@ const SERVICE_POLL_SECS = 2;
 const NUMBER_APPLY_DELAY_MS = 600;
 const DEFAULT_CHOICE = 'Default';
 
+const INDICATOR_STYLES: { value: string; label: string }[] = [
+    { value: 'classic', label: 'Classic' },
+    { value: 'minimal', label: 'Minimal' },
+    { value: 'wave', label: 'Wave' },
+    { value: 'osd', label: 'GNOME OSD' },
+];
+
 // The voxtype settings shown on the Voxtype page. Labels, descriptions, types and ranges come from
 // `voxtype config schema --json`, so only the key names live here. Keys this voxtype build does not
 // know (another engine, an older version) are skipped.
@@ -215,6 +222,10 @@ function buildIndicatorGroup(settings: Gio.Settings): Adw.PreferencesGroup {
     settings.bind('show-pill', pillRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     group.add(pillRow);
 
+    const styleRow = buildStyleRow(settings);
+    pillRow.bind_property('active', styleRow, 'sensitive', GObject.BindingFlags.SYNC_CREATE);
+    group.add(styleRow);
+
     const waveformRow = new Adw.SwitchRow({
         title: 'Show waveform',
     });
@@ -249,6 +260,33 @@ function buildIndicatorGroup(settings: Gio.Settings): Adw.PreferencesGroup {
     return group;
 }
 
+function buildStyleRow(settings: Gio.Settings): Adw.ComboRow {
+    const row = new Adw.ComboRow({
+        title: 'Style',
+        subtitle: 'Classic box, a small minimal capsule, a smooth wave, or a match for GNOME\'s volume popup.',
+        model: Gtk.StringList.new(INDICATOR_STYLES.map(style => style.label)),
+    });
+
+    const syncRow = () => {
+        const index = INDICATOR_STYLES.findIndex(style => style.value === settings.get_string('pill-style'));
+        if (row.selected !== Math.max(0, index)) {
+            row.selected = Math.max(0, index);
+        }
+    };
+
+    row.connect('notify::selected', () => {
+        const value = INDICATOR_STYLES[row.selected]?.value;
+        if (value !== undefined && value !== settings.get_string('pill-style')) {
+            settings.set_string('pill-style', value);
+        }
+    });
+    const changedId = settings.connect('changed::pill-style', syncRow);
+    row.connect('destroy', () => settings.disconnect(changedId));
+    syncRow();
+
+    return row;
+}
+
 function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
     const colorButton = new Gtk.ColorDialogButton({
         dialog: new Gtk.ColorDialog({ title: 'Accent color', with_alpha: false }),
@@ -262,7 +300,7 @@ function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
     });
     const row = new Adw.ActionRow({
         title: 'Accent color',
-        subtitle: 'Used for the indicator border, icon and waveform while you dictate.',
+        subtitle: 'Used for the waveform, the Classic border and the panel icon. The recording dot stays red.',
     });
     row.add_suffix(resetButton);
     row.add_suffix(colorButton);

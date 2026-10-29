@@ -5,23 +5,30 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import { accentColor, parseHexColor, Rgb } from './color.js';
-import { DaemonState } from './daemonState.js';
+import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
+import { DaemonState, isRecording } from './daemonState.js';
 import { AudioSample } from './levels.js';
-import { Waveform } from './waveform.js';
+import { IndicatorStyle, Waveform, WaveformMode } from './waveform.js';
 
-const PILL_WIDTH = 400;
-const PILL_HEIGHT = 72;
 const FADE_MS = 130;
 const POSITIONING_TIMEOUT_SECS = 20;
 const POSITIONING_LINGER_MS = 1200;
 
+const STYLE_SIZES: Record<IndicatorStyle, [number, number]> = {
+    classic: [400, 72],
+    minimal: [96, 30],
+    wave: [400, 72],
+    osd: [250, 62],
+};
+// Minimal without its equalizer is just the dot.
+const MINIMAL_DOT_ONLY_SIZE: [number, number] = [30, 30];
+
+// With live dictation the words are typed while you speak, so that already counts as transcribing.
 const STATE_LABELS: Partial<Record<DaemonState, string>> = {
     recording: 'Recording…',
+    streaming: 'Transcribing…',
     transcribing: 'Transcribing…',
 };
-
-const TRANSCRIBING_COLOR: Rgb = [0.949, 0.8, 0.302];
 
 type Drag = {
     grab: Clutter.Grab;
@@ -32,9 +39,10 @@ type Drag = {
 export class OsdPill {
     private readonly settings: Gio.Settings;
     private readonly container: St.BoxLayout;
-    private readonly icon: St.Icon;
-    private readonly label: St.Label;
     private readonly waveform = new Waveform();
+    private label: St.Label | null = null;
+    private dot: St.Widget | null = null;
+    private style: IndicatorStyle = 'classic';
     private readonly signalIds: number[] = [];
     private monitorsChangedId = 0;
     private state: DaemonState = 'unavailable';
@@ -46,30 +54,14 @@ export class OsdPill {
     constructor(settings: Gio.Settings) {
         this.settings = settings;
 
-        this.icon = new St.Icon({
-            style_class: 'voxtype-pill-icon',
-            icon_name: 'audio-input-microphone-symbolic',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        this.label = new St.Label({
-            style_class: 'voxtype-pill-label',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-
         this.container = new St.BoxLayout({
             style_class: 'voxtype-pill',
             reactive: true,
             visible: false,
             opacity: 0,
-            width: PILL_WIDTH,
-            height: PILL_HEIGHT,
         });
 
-        this.container.add_child(this.icon);
-        this.container.add_child(this.label);
-        this.container.add_child(this.waveform.actor);
-
+        this.buildContent();
         this.connectDragHandlers();
 
         Main.layoutManager.addTopChrome(this.container);
@@ -81,6 +73,10 @@ export class OsdPill {
         this.signalIds.push(this.settings.connect('changed::show-pill', () => this.render()));
         this.signalIds.push(this.settings.connect('changed::show-waveform', () => this.render()));
         this.signalIds.push(this.settings.connect('changed::accent-color', () => this.render()));
+        this.signalIds.push(this.settings.connect('changed::pill-style', () => {
+            this.buildContent();
+            this.render();
+        }));
 
         this.reposition();
     }
@@ -90,6 +86,9 @@ export class OsdPill {
     }
 
     setState(state: DaemonState): void {
+        if (isRecording(state) && !isRecording(this.state)) {
+            this.waveform.clear();
+        }
         this.state = state;
         if (STATE_LABELS[state] !== undefined) {
             this.endPositioning();
@@ -113,14 +112,6 @@ export class OsdPill {
         this.waveform.push(sample);
     }
 
-    startWaveform(): void {
-        this.waveform.startAnimating();
-    }
-
-    stopWaveform(): void {
-        this.waveform.stopAnimating();
-    }
-
     destroy(): void {
         this.endDrag(false);
         this.clearPositioningTimeout();
@@ -140,42 +131,124 @@ export class OsdPill {
         this.container.destroy();
     }
 
+    // Builds the inside of the pill for the chosen style. The waveform actor is kept and moved over.
+    private buildContent(): void {
+        this.waveform.actor.get_parent()?.remove_child(this.waveform.actor);
+        this.container.destroy_all_children();
+
+        this.style = readStyle(this.settings);
+        this.container.style_class = `voxtype-pill voxtype-pill-${this.style}`;
+        this.waveform.setStyle(this.style);
+
+        if (this.style === 'minimal') {
+            this.label = null;
+            this.dot = new St.Widget({
+                style_class: 'voxtype-pill-dot',
+                x_expand: true,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+            this.container.add_child(this.dot);
+            this.container.add_child(this.waveform.actor);
+            return;
+        }
+
+        // A white microphone with the status dot tucked into its bottom-right corner.
+        const microphone = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        microphone.add_child(new St.Icon({
+            style_class: 'voxtype-pill-icon',
+            icon_name: 'audio-input-microphone-symbolic',
+        }));
+        this.dot = new St.Widget({
+            style_class: 'voxtype-pill-badge',
+            x_expand: true,
+            y_expand: true,
+            x_align: Clutter.ActorAlign.END,
+            y_align: Clutter.ActorAlign.END,
+            translation_x: 2,
+            translation_y: 1,
+        });
+        microphone.add_child(this.dot);
+
+        const stack = new St.BoxLayout({
+            style_class: 'voxtype-pill-stack',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this.label = new St.Label({
+            style_class: 'voxtype-pill-label',
+            x_align: this.style === 'osd' ? Clutter.ActorAlign.CENTER : Clutter.ActorAlign.START,
+        });
+        stack.add_child(this.label);
+        stack.add_child(this.waveform.actor);
+
+        this.container.add_child(microphone);
+        this.container.add_child(stack);
+    }
+
     private render(): void {
-        this.container.remove_style_class_name('voxtype-pill-recording');
-        this.container.remove_style_class_name('voxtype-pill-transcribing');
-        this.container.remove_style_class_name('voxtype-pill-positioning');
-        this.container.set_style(null);
-        this.icon.set_style(null);
+        const accent = accentColor(this.settings.get_string('accent-color'));
+        const label = this.settings.get_boolean('show-pill') ? STATE_LABELS[this.state] : undefined;
 
-        const label = STATE_LABELS[this.state];
-        if (label !== undefined && this.settings.get_boolean('show-pill')) {
-            this.container.add_style_class_name(`voxtype-pill-${this.state}`);
-            this.label.set_text(label);
-            this.waveform.actor.visible = this.settings.get_boolean('show-waveform');
-
-            if (this.state === 'recording') {
-                // The stylesheet's red is only a fallback; inline styles win over it.
-                const accent = accentColor(this.settings.get_string('accent-color'));
-                this.container.set_style(`border-color: ${accent};`);
-                this.icon.set_style(`color: ${accent};`);
-                this.waveform.setColor(...(parseHexColor(accent) as Rgb));
-            } else {
-                this.waveform.setColor(...TRANSCRIBING_COLOR);
-            }
-
-            this.show();
+        if (label === undefined && !this.positioning) {
+            this.waveform.stop();
+            this.hide();
             return;
         }
 
-        if (this.positioning) {
-            this.container.add_style_class_name('voxtype-pill-positioning');
-            this.label.set_text('Drag to move');
-            this.waveform.actor.visible = false;
-            this.show();
-            return;
+        const showWaveform = this.settings.get_boolean('show-waveform');
+        const [width, height] = this.size();
+        this.container.set_size(width, height);
+        this.waveform.actor.visible = showWaveform;
+        this.waveform.setColor(parseHexColor(accent) as Rgb);
+
+        let mode: WaveformMode;
+        if (label !== undefined) {
+            this.setText(label);
+            this.setDot(isRecording(this.state) ? RECORDING_DOT_COLOR : accent);
+            mode = isRecording(this.state) ? 'live' : 'busy';
+        } else {
+            this.setText('Drag to move');
+            this.setDot(this.style === 'minimal' ? accent : null);
+            mode = 'still';
         }
 
-        this.hide();
+        // Classic always wears the accent as its border; the others only while being positioned.
+        const accentBorder = this.style === 'classic' || label === undefined;
+        this.container.set_style(accentBorder ? `border-color: ${accent};` : null);
+
+        if (showWaveform) {
+            this.waveform.start(mode);
+        } else {
+            this.waveform.stop();
+        }
+
+        this.show();
+    }
+
+    private setText(text: string): void {
+        // GNOME's own on-screen popups use short titles without an ellipsis.
+        this.label?.set_text(this.style === 'osd' ? text.replace('…', '') : text);
+    }
+
+    // The red dot means the microphone is live; null hides it.
+    private setDot(color: string | null): void {
+        if (this.dot === null) {
+            return;
+        }
+        this.dot.opacity = color === null ? 0 : 255;
+        this.dot.set_style(color === null ? null : `background-color: ${color};`);
+    }
+
+    private size(): [number, number] {
+        if (this.style === 'minimal' && !this.settings.get_boolean('show-waveform')) {
+            return MINIMAL_DOT_ONLY_SIZE;
+        }
+        return STYLE_SIZES[this.style];
     }
 
     private endPositioning(): void {
@@ -260,8 +333,9 @@ export class OsdPill {
         }
 
         const [x, y] = this.container.get_position();
-        const freeWidth = Math.max(1, monitor.width - PILL_WIDTH);
-        const freeHeight = Math.max(1, monitor.height - PILL_HEIGHT);
+        const [width, height] = this.size();
+        const freeWidth = Math.max(1, monitor.width - width);
+        const freeHeight = Math.max(1, monitor.height - height);
         this.settings.set_double('pill-x', clampFraction((x - monitor.x) / freeWidth));
         this.settings.set_double('pill-y', clampFraction((y - monitor.y) / freeHeight));
     }
@@ -272,9 +346,10 @@ export class OsdPill {
             return [x, y];
         }
 
+        const [width, height] = this.size();
         return [
-            Math.round(Math.min(Math.max(x, monitor.x), monitor.x + monitor.width - PILL_WIDTH)),
-            Math.round(Math.min(Math.max(y, monitor.y), monitor.y + monitor.height - PILL_HEIGHT)),
+            Math.round(Math.min(Math.max(x, monitor.x), monitor.x + monitor.width - width)),
+            Math.round(Math.min(Math.max(y, monitor.y), monitor.y + monitor.height - height)),
         ];
     }
 
@@ -319,13 +394,19 @@ export class OsdPill {
             return;
         }
 
+        const [width, height] = this.size();
         const fractionX = this.settings.get_double('pill-x');
         const fractionY = this.settings.get_double('pill-y');
         this.container.set_position(
-            monitor.x + Math.round((monitor.width - PILL_WIDTH) * fractionX),
-            monitor.y + Math.round((monitor.height - PILL_HEIGHT) * fractionY),
+            monitor.x + Math.round((monitor.width - width) * fractionX),
+            monitor.y + Math.round((monitor.height - height) * fractionY),
         );
     }
+}
+
+function readStyle(settings: Gio.Settings): IndicatorStyle {
+    const style = settings.get_string('pill-style');
+    return style in STYLE_SIZES ? style as IndicatorStyle : 'classic';
 }
 
 function clampFraction(value: number): number {

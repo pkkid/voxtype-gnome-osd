@@ -4,7 +4,7 @@ import St from 'gi://St';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import { DaemonState } from './daemonState.js';
+import { DaemonState, isRecording } from './daemonState.js';
 
 const STATE_STYLE_CLASSES = ['voxtype-indicator-recording', 'voxtype-indicator-transcribing'];
 const STOPPED_ICON_OPACITY = 115;
@@ -13,6 +13,7 @@ const STATUS_LABELS: Record<DaemonState, string> = {
     unavailable: 'Voxtype is stopped',
     idle: 'Voxtype is ready',
     recording: 'Dictating…',
+    streaming: 'Dictating…',
     transcribing: 'Transcribing…',
 };
 
@@ -81,8 +82,10 @@ export const PanelIndicator = GObject.registerClass(
             const running = state !== 'unavailable';
             this.icon.icon_name = running ? 'audio-input-microphone-symbolic' : 'microphone-disabled-symbolic';
             this.icon.opacity = running ? 255 : STOPPED_ICON_OPACITY;
-            if (running && state !== 'idle') {
-                this.icon.add_style_class_name(`voxtype-indicator-${state}`);
+            if (isRecording(state)) {
+                this.icon.add_style_class_name('voxtype-indicator-recording');
+            } else if (state === 'transcribing') {
+                this.icon.add_style_class_name('voxtype-indicator-transcribing');
             }
             this.syncAccentColor();
 
@@ -105,10 +108,10 @@ export const PanelIndicator = GObject.registerClass(
             this.syncVisibility();
         }
 
-        // The stylesheet's red is only a fallback; an inline style wins over it.
+        // The stylesheet's color is only a fallback; an inline style wins over it.
         private syncAccentColor() {
-            const recording = this.state === 'recording' && this.accentColor !== null;
-            this.icon.set_style(recording ? `color: ${this.accentColor};` : null);
+            const busy = isRecording(this.state) || this.state === 'transcribing';
+            this.icon.set_style(busy && this.accentColor !== null ? `color: ${this.accentColor};` : null);
         }
 
         private syncVisibility() {
@@ -166,7 +169,7 @@ export const PanelIndicator = GObject.registerClass(
             this.serviceItem.setToggleState(this.pendingServiceState ?? running);
             this.syncingServiceItem = false;
             this.dictationItem.visible = running;
-            this.dictationItem.label.text = this.state === 'recording' ? 'Stop dictation' : 'Start dictation';
+            this.dictationItem.label.text = isRecording(this.state) ? 'Stop dictation' : 'Start dictation';
         }
     },
 );

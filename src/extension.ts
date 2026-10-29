@@ -5,7 +5,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { AudioBridge } from './audioBridge.js';
 import { accentColor } from './color.js';
-import { DaemonState, DaemonStateWatcher } from './daemonState.js';
+import { DaemonState, DaemonStateWatcher, isRecording } from './daemonState.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
 import { CommandResult, setServiceRunning, toggleRecording } from './voxtype.js';
@@ -93,14 +93,11 @@ export default class VoxtypeOsdExtension extends Extension {
         this.indicator?.setState(state);
         this.pill?.setState(state);
 
-        if (state === 'recording' && this.pill?.showsWaveform) {
-            this.pill.startWaveform();
+        if (isRecording(state) && this.pill?.showsWaveform) {
             this.bridge?.start();
-            return;
+        } else {
+            this.bridge?.stop();
         }
-
-        this.bridge?.stop();
-        this.pill?.stopWaveform();
     }
 
     private changeService(running: boolean) {

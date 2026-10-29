@@ -6,17 +6,25 @@ panel menu to control the voxtype service, and a settings window.
 
 ## Features
 
-- **Panel icon:** the accent color (red by default) while dictating, yellow while transcribing, a dimmed crossed-out microphone while
-  the voxtype service is stopped.
+- **Panel icon:** the accent color (red by default) while dictating or transcribing, a dimmed
+  crossed-out microphone while the voxtype service is stopped.
   - Left click starts and stops dictation (can be turned off in settings).
   - Right click opens a menu: current status, start/stop dictation, a switch for the voxtype service,
     "Move recording indicator" and Settings.
-- **Recording indicator:** an on-screen pill with a live waveform. Drag it to move it; the position is
-  remembered. "Move recording indicator" shows it for 20 seconds so it can be moved without recording.
-  Its accent color (border, icon and waveform while dictating) can be changed in settings.
+- **Recording indicator:** an on-screen pill that follows your voice, in one of four styles:
+  - **Classic:** a box with the status above a row of bars that steps left ten times a second.
+  - **Minimal:** a small capsule with just the status dot and a tiny equalizer.
+  - **Wave:** a rounded pill with layered sine ribbons whose height follows your voice.
+  - **GNOME OSD:** shaped like GNOME's own volume popup, with an equalizer in place of the slider.
+
+  A red dot on the microphone means it is live. The label reads "Recording…" while recording, and
+  "Transcribing…" while voxtype transcribes, which with live dictation (`[parakeet] streaming`) is
+  already the case while you speak. The waveform and Classic border use the accent color. Drag the
+  indicator to move it; the position is remembered. "Move recording indicator" shows it for 20
+  seconds so it can be moved without recording.
 - **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
   - **General:** run voxtype now / at login, the dictation shortcut, left-click behaviour, what the
-    indicators show, and their accent color.
+    indicators show, their style and their accent color.
   - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device,
     max recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
     descriptions, types and ranges come from `voxtype config schema --json`; changes are written with
@@ -25,10 +33,11 @@ panel menu to control the voxtype service, and a settings window.
 ## How it works
 
 - **State:** watches `$XDG_RUNTIME_DIR/voxtype/state` with a `Gio.FileMonitor` and maps it to
-  `idle`, `recording` (also reported as `streaming` during live dictation), `transcribing` or
+  `idle`, `recording`, `streaming` (recording with live dictation), `transcribing` or
   `unavailable`. voxtype deletes the file when the daemon stops, which is how "stopped" is detected.
 - **Waveform:** while recording, launches `voxtype-audio-bridge` as a subprocess and reads one JSON line
-  per sample (`{"peak": 0.42}`) from its stdout, drawing the last 300 peaks. Malformed lines are dropped.
+  per sample (`{"peak": 0.42}`) from its stdout. Classic keeps the loudest peak of each 100 ms as one
+  bar; the other styles follow the latest peaks and a smoothed level. Malformed lines are dropped.
 - **Service control:** `systemctl --user start|stop|enable|disable voxtype.service`.
 - **Shortcut:** stored as a regular GNOME custom keyboard shortcut whose command is
   `voxtype record toggle`, so it keeps working even if the extension is disabled. The settings window

@@ -2,6 +2,9 @@
 
 export const DEFAULT_ACCENT_COLOR = '#f2594d';
 
+// The dot shown while the microphone is live. Always red, whatever the accent, so it reads as recording.
+export const RECORDING_DOT_COLOR = '#ed333b';
+
 export type Rgb = [number, number, number];
 
 const HEX_COLOR = /^#([0-9a-f]{6})$/i;

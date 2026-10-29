@@ -14,14 +14,24 @@
       <default>true</default>
       <summary>Show the on-screen recording indicator</summary>
     </key>
+    <key name="pill-style" type="s">
+      <choices>
+        <choice value="classic"/>
+        <choice value="minimal"/>
+        <choice value="wave"/>
+        <choice value="osd"/>
+      </choices>
+      <default>'classic'</default>
+      <summary>Look of the on-screen recording indicator</summary>
+    </key>
     <key name="show-waveform" type="b">
       <default>true</default>
       <summary>Draw a live waveform inside the recording indicator</summary>
     </key>
     <key name="accent-color" type="s">
       <default>'#f2594d'</default>
-      <summary>Accent color shown while recording, as #rrggbb</summary>
-      <description>Used for the recording indicator's border, icon and waveform, and the panel icon.</description>
+      <summary>Accent color of the indicators, as #rrggbb</summary>
+      <description>Used for the recording indicator's waveform and Classic border, and the panel icon while dictating or transcribing.</description>
     </key>
     <key name="pill-x" type="d">
       <range min="0" max="1"/>
