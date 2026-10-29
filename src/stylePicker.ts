@@ -3,6 +3,7 @@ import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 
+import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
 import { ensurePrefsCss } from './prefsWindow.js';
 
 // Previews are drawn on a 150×64 canvas, scaled to fit the card.
@@ -19,7 +20,7 @@ type StyleOption = {
     value: string;
     title: string;
     caption: string;
-    draw: (cr: Context) => void;
+    draw: (cr: Context, accent: Rgb) => void;
 };
 
 const STYLE_OPTIONS: StyleOption[] = [
@@ -29,7 +30,10 @@ const STYLE_OPTIONS: StyleOption[] = [
     { value: 'osd', title: 'GNOME OSD', caption: 'Like the volume popup', draw: drawOsd },
 ];
 
-// A 2×2 grid of cards, each a monotone sketch of one indicator style. Picking a card sets `key`.
+const RECORDING_DOT = parseHexColor(RECORDING_DOT_COLOR) as Rgb;
+
+// A 2×2 grid of cards, each a sketch of one indicator style in white and the accent color, as it
+// will look on screen. Picking a card sets `key`.
 export function buildStylePickerGroup(settings: Gio.Settings, key: string): Adw.PreferencesGroup {
     ensurePrefsCss();
 
@@ -45,9 +49,12 @@ export function buildStylePickerGroup(settings: Gio.Settings, key: string): Adw.
     });
     group.add(grid);
 
+    let accent = readAccent(settings);
+    const stages: Gtk.DrawingArea[] = [];
     const cards = new Map<string, Gtk.ToggleButton>();
     STYLE_OPTIONS.forEach((option, index) => {
-        const card = buildCard(option);
+        const [card, stage] = buildCard(option, () => accent);
+        stages.push(stage);
         const first = cards.values().next().value;
         if (first !== undefined) {
             card.set_group(first);
@@ -65,14 +72,24 @@ export function buildStylePickerGroup(settings: Gio.Settings, key: string): Adw.
     const sync = () => {
         (cards.get(settings.get_string(key)) ?? cards.get('classic'))?.set_active(true);
     };
-    const changedId = settings.connect(`changed::${key}`, sync);
-    grid.connect('destroy', () => settings.disconnect(changedId));
+    const changedIds = [
+        settings.connect(`changed::${key}`, sync),
+        settings.connect('changed::accent-color', () => {
+            accent = readAccent(settings);
+            stages.forEach(stage => stage.queue_draw());
+        }),
+    ];
+    grid.connect('destroy', () => changedIds.forEach(id => settings.disconnect(id)));
     sync();
 
     return group;
 }
 
-function buildCard(option: StyleOption): Gtk.ToggleButton {
+function readAccent(settings: Gio.Settings): Rgb {
+    return parseHexColor(accentColor(settings.get_string('accent-color'))) as Rgb;
+}
+
+function buildCard(option: StyleOption, getAccent: () => Rgb): [Gtk.ToggleButton, Gtk.DrawingArea] {
     const stage = new Gtk.DrawingArea({
         content_height: STAGE_HEIGHT,
         hexpand: true,
@@ -82,7 +99,7 @@ function buildCard(option: StyleOption): Gtk.ToggleButton {
         const scale = Math.min(width / SCENE_WIDTH, height / SCENE_HEIGHT, 1.3);
         cr.translate((width - SCENE_WIDTH * scale) / 2, (height - SCENE_HEIGHT * scale) / 2);
         cr.scale(scale, scale);
-        option.draw(cr);
+        option.draw(cr, getAccent());
         cr.$dispose();
     });
 
@@ -98,32 +115,33 @@ function buildCard(option: StyleOption): Gtk.ToggleButton {
     box.append(stage);
     box.append(footer);
 
-    return new Gtk.ToggleButton({
+    const card = new Gtk.ToggleButton({
         child: box,
         css_classes: ['flat', 'voxtype-style-card'],
         tooltip_text: option.title,
     });
+    return [card, stage];
 }
 
 // ───────────────────────── Preview sketches ─────────────────────────
 
-function drawClassic(cr: Context): void {
-    drawPill(cr, 5, 12, 140, 40, 6, true);
+function drawClassic(cr: Context, accent: Rgb): void {
+    drawPill(cr, 5, 12, 140, 40, 6, accent);
     drawMicrophone(cr, 21, 32);
     drawLabel(cr, 36, 22, 34);
-    drawBars(cr, 36, 136, 38, 4, 12);
+    drawBars(cr, accent, 36, 136, 38, 4, 12);
 }
 
-function drawMinimal(cr: Context): void {
-    drawPill(cr, 42, 21, 66, 22, 11, false);
-    white(cr, 1);
+function drawMinimal(cr: Context, accent: Rgb): void {
+    drawPill(cr, 42, 21, 66, 22, 11, null);
+    color(cr, RECORDING_DOT, 1);
     cr.arc(55, 32, 3, 0, Math.PI * 2);
     cr.fill();
-    drawBars(cr, 64, 100, 32, 4.5, 12);
+    drawBars(cr, accent, 64, 100, 32, 4.5, 12);
 }
 
-function drawWave(cr: Context): void {
-    drawPill(cr, 5, 12, 140, 40, 20, false);
+function drawWave(cr: Context, accent: Rgb): void {
+    drawPill(cr, 5, 12, 140, 40, 20, null);
     drawMicrophone(cr, 24, 32);
     drawLabel(cr, 39, 22, 34);
 
@@ -142,26 +160,31 @@ function drawWave(cr: Context): void {
                 cr.lineTo(x, y);
             }
         }
-        white(cr, layer.alpha);
+        color(cr, accent, layer.alpha);
         cr.setLineWidth(1.5);
         cr.stroke();
     }
 }
 
-function drawOsd(cr: Context): void {
-    drawPill(cr, 22, 10, 106, 44, 22, false);
+function drawOsd(cr: Context, accent: Rgb): void {
+    drawPill(cr, 22, 10, 106, 44, 22, null);
     drawMicrophone(cr, 41, 32);
     drawLabel(cr, 74, 20, 30);
-    drawBars(cr, 60, 116, 39, 4, 9);
+    drawBars(cr, accent, 60, 116, 39, 4, 9);
 }
 
-// The indicator's outline: a translucent body, with a solid border for Classic.
-function drawPill(cr: Context, x: number, y: number, width: number, height: number, radius: number, bordered: boolean): void {
+// The indicator's outline: a translucent body, with a solid colored border for Classic.
+function drawPill(cr: Context, x: number, y: number, width: number, height: number, radius: number, border: Rgb | null): void {
     roundedRect(cr, x, y, width, height, radius);
     white(cr, 0.12);
     cr.fillPreserve();
-    white(cr, bordered ? 0.9 : 0.3);
-    cr.setLineWidth(bordered ? 1.5 : 1);
+    if (border === null) {
+        white(cr, 0.3);
+        cr.setLineWidth(1);
+    } else {
+        color(cr, border, 1);
+        cr.setLineWidth(1.5);
+    }
     cr.stroke();
 }
 
@@ -178,6 +201,11 @@ function drawMicrophone(cr: Context, centreX: number, centreY: number): void {
     cr.lineTo(centreX, centreY + 7);
     cr.stroke();
 
+    // A dark ring around the dot, like the cut-out it has on screen.
+    cr.setSourceRGBA(0.16, 0.16, 0.19, 1);
+    cr.arc(centreX + 5, centreY + 5, 3.8, 0, Math.PI * 2);
+    cr.fill();
+    color(cr, RECORDING_DOT, 1);
     cr.arc(centreX + 5, centreY + 5, 2.5, 0, Math.PI * 2);
     cr.fill();
 }
@@ -190,8 +218,8 @@ function drawLabel(cr: Context, x: number, y: number, width: number): void {
 }
 
 // Rounded bars from `left` to `right`, centred on `middle`, at most `maxHeight` tall.
-function drawBars(cr: Context, left: number, right: number, middle: number, pitch: number, maxHeight: number): void {
-    white(cr, 0.95);
+function drawBars(cr: Context, accent: Rgb, left: number, right: number, middle: number, pitch: number, maxHeight: number): void {
+    color(cr, accent, 0.95);
     cr.setLineWidth(2);
     cr.setLineCap(Cairo.LineCap.ROUND);
 
@@ -218,4 +246,8 @@ function roundedRect(cr: Context, x: number, y: number, width: number, height: n
 
 function white(cr: Context, alpha: number): void {
     cr.setSourceRGBA(1, 1, 1, alpha);
+}
+
+function color(cr: Context, [red, green, blue]: Rgb, alpha: number): void {
+    cr.setSourceRGBA(red, green, blue, alpha);
 }
