@@ -6,6 +6,7 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import { choiceModel } from './choices.js';
 import { accentColor, parseHexColor, rgbToHex } from './color.js';
 import { setSidebarContent, showToast } from './prefsWindow.js';
 import { buildStylePickerGroup } from './stylePicker.js';
@@ -24,7 +25,6 @@ const CUSTOM_KEYBINDING_BASE = '/org/gnome/settings-daemon/plugins/media-keys/cu
 const TOGGLE_COMMAND = 'voxtype record toggle';
 const SERVICE_POLL_SECS = 2;
 const NUMBER_APPLY_DELAY_MS = 600;
-const DEFAULT_CHOICE = 'Default';
 
 // The voxtype settings shown on the Voxtype page. Labels, descriptions, types and ranges come from
 // `voxtype config schema --json`, so only the key names live here. Keys this voxtype build does not
@@ -544,27 +544,18 @@ function buildSwitchRow(entry: SchemaKey, apply: Apply): Adw.SwitchRow {
 }
 
 function buildChoiceRow(entry: SchemaKey, choices: string[], apply: Apply): Adw.ComboRow | null {
-    const values: (string | null)[] = [...choices];
-    const current = entry.value === null ? null : String(entry.value);
-
-    if (current === null) {
-        values.unshift(null);
-    } else if (!values.includes(current)) {
-        values.unshift(current);
-    }
-
-    if (values.length === 0) {
+    const model = choiceModel(choices, entry.value);
+    if (model === null) {
         return null;
     }
 
-    const labels = values.map(value => (value === null ? DEFAULT_CHOICE : prettyChoice(value)));
     const row = new Adw.ComboRow({
         title: entry.label,
         subtitle: entry.description,
-        model: Gtk.StringList.new(labels),
-        selected: Math.max(0, values.indexOf(current)),
+        model: Gtk.StringList.new(model.labels),
+        selected: model.selected,
     });
-    row.connect('notify::selected', () => apply(entry, values[row.selected] ?? null));
+    row.connect('notify::selected', () => apply(entry, model.values[row.selected] ?? null));
     return row;
 }
 
@@ -620,11 +611,6 @@ async function loadDevices(): Promise<AudioDevice[]> {
 }
 
 // ───────────────────────── Helpers ─────────────────────────
-
-function prettyChoice(value: string): string {
-    const spaced = value.replace(/_/g, ' ');
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
 
 function firstLine(text: string): string {
     return text.trim().split('\n')[0] ?? '';

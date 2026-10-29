@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "test": "tsc -p tsconfig.test.json && node --test 'build-test/test/*.test.js'",
+    "test": "tsc --noEmit -p . && tsc -p tsconfig.test.json && node --test 'build-test/test/*.test.js'",
     "install-extension": "./scripts/install.sh",
-    "pack": "./scripts/pack.sh"
+    "pack": "./scripts/pack.sh",
+    "test:shell": "npm run build && node --test --test-reporter=spec test/shell/shell.test.mjs"
   },
   "devDependencies": {
     "@girs/gnome-shell": "50.0.4",

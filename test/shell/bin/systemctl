@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Stand-in for systemctl in the shell tests: records the call and pretends voxtype.service exists.
+echo "systemctl $*" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
+case "$*" in
+    *is-active*) [ -e "$VOXTYPE_OSD_TEST_DIR/service-active" ] ;;
+    *is-enabled*) exit 1 ;;
+    *start*|*restart*) touch "$VOXTYPE_OSD_TEST_DIR/service-active" ;;
+    *stop*) rm -f "$VOXTYPE_OSD_TEST_DIR/service-active" ;;
+esac

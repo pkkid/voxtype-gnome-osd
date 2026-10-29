@@ -1,5 +1,6 @@
 import Adw from 'gi://Adw';
 import Gdk from 'gi://Gdk';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 // Below this width the sidebar and the page take turns instead of sitting side by side.
@@ -126,7 +127,9 @@ export function setSidebarContent(window: Adw.PreferencesWindow, header: Sidebar
     list.connect('row-activated', () => {
         split.show_content = true;
     });
-    list.select_row(list.get_row_at_index(0));
+    // VOXTYPE_OSD_PREFS_PAGE=<page name> opens another page first; the shell tests use it.
+    const firstPage = Math.max(0, pages.findIndex(page => page.name === GLib.getenv('VOXTYPE_OSD_PREFS_PAGE')));
+    list.select_row(list.get_row_at_index(firstPage));
 
     const breakpoint = new Adw.Breakpoint({ condition: Adw.BreakpointCondition.parse(COLLAPSE_CONDITION) });
     breakpoint.add_setter(split, 'collapsed', true);

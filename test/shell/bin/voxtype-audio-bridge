@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stand-in for voxtype-audio-bridge in the shell tests: speech-like peaks, about 30 a second.
+echo "voxtype-audio-bridge" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
+while true; do
+    printf '{"peak":0.0%d}\n' $((RANDOM % 10)) || exit 0
+    sleep 0.033
+done

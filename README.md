@@ -79,8 +79,16 @@ npm run pack    # writes dist/voxtype-osd@theoodawara.shell-extension.zip
 
 ```sh
 npm run build
-npm test
+npm test            # type check and unit tests, about a second
+npm run test:shell  # the extension in a real, headless GNOME Shell, about 25 seconds
 ```
 
-Written in TypeScript against the `@girs/gnome-shell` type definitions; the level parsing is covered by
-`node:test`.
+`npm test` covers the pure logic: parsing voxtype's state file and audio levels, the bars and
+waveforms, accent colors, the Voxtype page's dropdowns, and the settings schema. It runs on every push.
+
+`npm run test:shell` needs `gnome-shell` installed. It starts a headless GNOME Shell with its own D-Bus
+session, settings and runtime directory, so your desktop is not touched, and swaps `voxtype`,
+`systemctl` and `voxtype-audio-bridge` for scripts that record every call. It then checks a full
+dictation, live dictation, every style, live settings changes, the panel menu, that voxtype is never
+started or stopped on its own, clean disable/enable, and that each Settings page opens without errors.
+Set `VOXTYPE_OSD_SCREENSHOTS=<dir>` to also save screenshots of each style and Settings page.

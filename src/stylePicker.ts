@@ -5,6 +5,7 @@ import Gtk from 'gi://Gtk';
 
 import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
 import { ensurePrefsCss } from './prefsWindow.js';
+import { IndicatorStyle } from './styles.js';
 
 // Previews are drawn on a 150×64 canvas, scaled to fit the card.
 const SCENE_WIDTH = 150;
@@ -17,7 +18,7 @@ const BAR_PATTERN = [0.35, 0.6, 0.9, 0.5, 0.75, 0.3, 0.55, 1, 0.65, 0.4, 0.8, 0.
 type Context = Cairo.Context;
 
 type StyleOption = {
-    value: string;
+    value: IndicatorStyle;
     title: string;
     caption: string;
     draw: (cr: Context, accent: Rgb) => void;

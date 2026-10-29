@@ -8,7 +8,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
 import { DaemonState, isRecording } from './daemonState.js';
 import { AudioSample } from './levels.js';
-import { IndicatorStyle, Waveform, WaveformMode } from './waveform.js';
+import { IndicatorStyle, isIndicatorStyle } from './styles.js';
+import { Waveform, WaveformMode } from './waveform.js';
 
 const FADE_MS = 130;
 const POSITIONING_TIMEOUT_SECS = 20;
@@ -406,7 +407,7 @@ export class OsdPill {
 
 function readStyle(settings: Gio.Settings): IndicatorStyle {
     const style = settings.get_string('pill-style');
-    return style in STYLE_SIZES ? style as IndicatorStyle : 'classic';
+    return isIndicatorStyle(style) ? style : 'classic';
 }
 
 function clampFraction(value: number): number {

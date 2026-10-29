@@ -1,31 +1,12 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
-// 'streaming' is recording with live dictation ([parakeet] streaming = true): text is typed while
-// you speak instead of after you stop.
-export type DaemonState = 'unavailable' | 'idle' | 'recording' | 'streaming' | 'transcribing';
+import { DaemonState, parseStateFile } from './states.js';
 
-const KNOWN_STATES: DaemonState[] = ['idle', 'recording', 'streaming', 'transcribing'];
-
-// True while the microphone is live, with or without live dictation.
-export function isRecording(state: DaemonState): boolean {
-    return state === 'recording' || state === 'streaming';
-}
+export { DaemonState, isRecording } from './states.js';
 
 function stateFilePath(): string {
     return GLib.build_filenamev([GLib.get_user_runtime_dir(), 'voxtype', 'state']);
-}
-
-function toDaemonState(contents: string): DaemonState {
-    const trimmed = contents.trim();
-
-    for (const candidate of KNOWN_STATES) {
-        if (candidate === trimmed) {
-            return candidate;
-        }
-    }
-
-    return 'unavailable';
 }
 
 export class DaemonStateWatcher {
@@ -77,7 +58,7 @@ export class DaemonStateWatcher {
             try {
                 const [ok, contents] = source!.load_contents_finish(result);
                 if (ok) {
-                    next = toDaemonState(new TextDecoder().decode(contents));
+                    next = parseStateFile(new TextDecoder().decode(contents));
                 }
             } catch (error) {
                 if (error instanceof Gio.IOErrorEnum && error.code === Gio.IOErrorEnum.CANCELLED) {

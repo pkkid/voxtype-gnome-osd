@@ -5,6 +5,7 @@ import St from 'gi://St';
 
 import { Rgb } from './color.js';
 import { AudioSample, equalizerHeights, LevelHistory, rippleHeights } from './levels.js';
+import { IndicatorStyle } from './styles.js';
 
 const REDRAW_INTERVAL_MS = 33;
 const STEP_INTERVAL_US = 100_000;
@@ -12,7 +13,6 @@ const BAR_WIDTH = 3;
 const STEP_PITCH = 6;
 const RIPPLE_SPEED = 6;
 
-export type IndicatorStyle = 'classic' | 'minimal' | 'wave' | 'osd';
 
 // live: follows the microphone. busy: voxtype is transcribing. still: flat, used while positioning.
 export type WaveformMode = 'live' | 'busy' | 'still';
