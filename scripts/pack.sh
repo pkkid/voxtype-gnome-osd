@@ -10,12 +10,13 @@ npm run build
 
 rm -rf "${STAGE_DIR}"
 mkdir -p "${STAGE_DIR}" dist
-cp build/*.js metadata.json stylesheet.css "${STAGE_DIR}/"
+cp -r build/. "${STAGE_DIR}/"
+cp metadata.json stylesheet.css "${STAGE_DIR}/"
 
 extra_sources=()
-for file in "${STAGE_DIR}"/*.js; do
+for file in "${STAGE_DIR}"/*; do
     case "$(basename "${file}")" in
-        extension.js|prefs.js) ;;
+        extension.js|prefs.js|metadata.json|stylesheet.css) ;;
         *) extra_sources+=("--extra-source=$(basename "${file}")") ;;
     esac
 done

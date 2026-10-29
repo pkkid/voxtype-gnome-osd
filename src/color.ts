@@ -25,7 +25,6 @@ export function accentColor(value: string): string {
     return parseHexColor(value) === null ? DEFAULT_ACCENT_COLOR : value.trim().toLowerCase();
 }
 
-// Turns 0..1 channels into #rrggbb.
 export function rgbToHex(red: number, green: number, blue: number): string {
     return `#${[red, green, blue].map(channel => {
         const byte = Math.round(Math.min(Math.max(channel, 0), 1) * 255);

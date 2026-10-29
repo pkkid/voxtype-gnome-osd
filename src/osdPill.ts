@@ -12,7 +12,7 @@ import { IndicatorStyle, isIndicatorStyle } from './styles.js';
 import { Waveform, WaveformMode } from './waveform.js';
 
 const FADE_MS = 130;
-const POSITIONING_TIMEOUT_SECS = 20;
+const POSITIONING_TIMEOUT_MS = 20_000;
 const POSITIONING_LINGER_MS = 1200;
 
 const STYLE_SIZES: Record<IndicatorStyle, [number, number]> = {
@@ -100,12 +100,7 @@ export class OsdPill {
     // Shows the pill with a hint so it can be dragged somewhere new while nothing is recording.
     startPositioning(): void {
         this.positioning = true;
-        this.clearPositioningTimeout();
-        this.positioningTimeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, POSITIONING_TIMEOUT_SECS, () => {
-            this.positioningTimeoutId = 0;
-            this.endPositioning();
-            return GLib.SOURCE_REMOVE;
-        });
+        this.scheduleEndPositioning(POSITIONING_TIMEOUT_MS);
         this.render();
     }
 
@@ -261,6 +256,15 @@ export class OsdPill {
         this.render();
     }
 
+    private scheduleEndPositioning(delayMs: number): void {
+        this.clearPositioningTimeout();
+        this.positioningTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+            this.positioningTimeoutId = 0;
+            this.endPositioning();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     private clearPositioningTimeout(): void {
         if (this.positioningTimeoutId !== 0) {
             GLib.source_remove(this.positioningTimeoutId);
@@ -318,12 +322,7 @@ export class OsdPill {
         }
 
         if (this.positioning) {
-            this.clearPositioningTimeout();
-            this.positioningTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, POSITIONING_LINGER_MS, () => {
-                this.positioningTimeoutId = 0;
-                this.endPositioning();
-                return GLib.SOURCE_REMOVE;
-            });
+            this.scheduleEndPositioning(POSITIONING_LINGER_MS);
         }
     }
 

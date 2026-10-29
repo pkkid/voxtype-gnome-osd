@@ -32,6 +32,104 @@ const INTERFACE = `
   </interface>
 </node>`;
 
+// A stand-in for the systemd user manager, enough for voxtype.service. The service's state lives in
+// files in the test directory so the tests can set it: service-active, and systemd-fails to make
+// starting and stopping fail. Calls that change something are recorded in calls.log.
+const SYSTEMD_INTERFACES = `
+<node>
+  <interface name="org.freedesktop.systemd1.Manager">
+    <method name="StartUnit"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="o" direction="out"/></method>
+    <method name="StopUnit"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="o" direction="out"/></method>
+    <method name="RestartUnit"><arg type="s" direction="in"/><arg type="s" direction="in"/><arg type="o" direction="out"/></method>
+    <method name="LoadUnit"><arg type="s" direction="in"/><arg type="o" direction="out"/></method>
+    <method name="GetUnitFileState"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
+    <method name="EnableUnitFiles">
+      <arg type="as" direction="in"/><arg type="b" direction="in"/><arg type="b" direction="in"/>
+      <arg type="b" direction="out"/><arg type="a(sss)" direction="out"/>
+    </method>
+    <method name="DisableUnitFiles">
+      <arg type="as" direction="in"/><arg type="b" direction="in"/><arg type="a(sss)" direction="out"/>
+    </method>
+    <method name="Reload"/>
+  </interface>
+</node>`;
+const UNIT_INTERFACE = `
+<node>
+  <interface name="org.freedesktop.systemd1.Unit">
+    <property name="ActiveState" type="s" access="read"/>
+  </interface>
+</node>`;
+const UNIT_PATH = '/org/freedesktop/systemd1/unit/voxtype_2eservice';
+const JOB_PATH = '/org/freedesktop/systemd1/job/1';
+
+function testFile(name) {
+    return Gio.File.new_for_path(GLib.build_filenamev([GLib.getenv('VOXTYPE_OSD_TEST_DIR'), name]));
+}
+
+function recordCall(line) {
+    const stream = testFile('calls.log').append_to(Gio.FileCreateFlags.NONE, null);
+    stream.write_all(new TextEncoder().encode(`${line}\n`), null);
+    stream.close(null);
+}
+
+class FakeSystemd {
+    get ActiveState() {
+        return testFile('service-active').query_exists(null) ? 'active' : 'inactive';
+    }
+
+    StartUnitAsync([unit], invocation) {
+        this._changeUnit('StartUnit', unit, invocation, () => testFile('service-active').replace_contents('', null, false, 0, null));
+    }
+
+    StopUnitAsync([unit], invocation) {
+        this._changeUnit('StopUnit', unit, invocation, () => testFile('service-active').delete(null));
+    }
+
+    RestartUnitAsync([unit], invocation) {
+        this._changeUnit('RestartUnit', unit, invocation, () => testFile('service-active').replace_contents('', null, false, 0, null));
+    }
+
+    LoadUnit() {
+        return UNIT_PATH;
+    }
+
+    GetUnitFileState() {
+        return testFile('service-enabled').query_exists(null) ? 'enabled' : 'disabled';
+    }
+
+    EnableUnitFiles([units]) {
+        recordCall(`systemd EnableUnitFiles ${units.join(' ')}`);
+        testFile('service-enabled').replace_contents('', null, false, 0, null);
+        return [false, []];
+    }
+
+    DisableUnitFiles([units]) {
+        recordCall(`systemd DisableUnitFiles ${units.join(' ')}`);
+        if (testFile('service-enabled').query_exists(null)) {
+            testFile('service-enabled').delete(null);
+        }
+        return [[]];
+    }
+
+    Reload() {
+        recordCall('systemd Reload');
+    }
+
+    _changeUnit(method, unit, invocation, change) {
+        recordCall(`systemd ${method} ${unit}`);
+        if (testFile('systemd-fails').query_exists(null)) {
+            invocation.return_dbus_error('org.freedesktop.systemd1.NoSuchUnit', `Unit ${unit} not found.`);
+            return;
+        }
+        try {
+            change();
+        } catch {
+            // Already in that state.
+        }
+        invocation.return_value(new GLib.Variant('(o)', [JOB_PATH]));
+    }
+}
+
 function indicator() {
     return Main.panel.statusArea[UUID] ?? null;
 }
@@ -116,6 +214,13 @@ export default class TestHelper extends Extension {
         this._dbus.export(Gio.DBus.session, OBJECT_PATH);
         this._nameId = Gio.bus_own_name_on_connection(Gio.DBus.session, BUS_NAME, Gio.BusNameOwnerFlags.NONE, null, null);
 
+        const systemd = new FakeSystemd();
+        this._systemdManager = Gio.DBusExportedObject.wrapJSObject(SYSTEMD_INTERFACES, systemd);
+        this._systemdManager.export(Gio.DBus.session, '/org/freedesktop/systemd1');
+        this._systemdUnit = Gio.DBusExportedObject.wrapJSObject(UNIT_INTERFACE, systemd);
+        this._systemdUnit.export(Gio.DBus.session, UNIT_PATH);
+        this._systemdNameId = Gio.bus_own_name_on_connection(Gio.DBus.session, 'org.freedesktop.systemd1', Gio.BusNameOwnerFlags.NONE, null, null);
+
         // The headless shell starts in the overview; the tests want the plain desktop.
         if (Main.layoutManager._startingUp) {
             this._startupId = Main.layoutManager.connect('startup-complete', () => Main.overview.hide());
@@ -130,6 +235,9 @@ export default class TestHelper extends Extension {
         }
         Gio.bus_unown_name(this._nameId);
         this._dbus.unexport();
+        Gio.bus_unown_name(this._systemdNameId);
+        this._systemdManager.unexport();
+        this._systemdUnit.unexport();
     }
 
     Inspect(path) {

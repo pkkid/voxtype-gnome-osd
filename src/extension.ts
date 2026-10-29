@@ -8,7 +8,8 @@ import { accentColor } from './color.js';
 import { DaemonState, DaemonStateWatcher, isRecording } from './daemonState.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
-import { CommandResult, setServiceRunning, toggleRecording } from './voxtype.js';
+import { setServiceRunning } from './systemd.js';
+import { CommandResult, toggleRecording } from './voxtype.js';
 
 const PANEL_POSITION = 0;
 // Loading the model can take a few seconds; give up on "Starting…" after this.

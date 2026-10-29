@@ -3,9 +3,9 @@ import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 
-import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
-import { ensurePrefsCss } from './prefsWindow.js';
-import { IndicatorStyle } from './styles.js';
+import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from '../color.js';
+import { ensurePrefsCss } from './window.js';
+import { IndicatorStyle } from '../styles.js';
 
 // Previews are drawn on a 150×64 canvas, scaled to fit the card.
 const SCENE_WIDTH = 150;
@@ -123,8 +123,6 @@ function buildCard(option: StyleOption, getAccent: () => Rgb): [Gtk.ToggleButton
     });
     return [card, stage];
 }
-
-// ───────────────────────── Preview sketches ─────────────────────────
 
 function drawClassic(cr: Context, accent: Rgb): void {
     drawPill(cr, 5, 12, 140, 40, 6, accent);

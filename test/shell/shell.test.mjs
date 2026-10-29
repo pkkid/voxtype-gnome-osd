@@ -1,15 +1,16 @@
 // Runs the built extension inside a real, headless GNOME Shell and checks what it does.
 //
 // Everything is isolated in a temporary directory: its own D-Bus session, dconf database, runtime
-// directory and extensions folder, so the desktop you are logged into is never touched. voxtype,
-// systemctl and voxtype-audio-bridge are replaced by the scripts in test/shell/bin, which record
-// every call in calls.log. A helper extension (test/shell/helper) reports what is on screen.
+// directory and extensions folder, so the desktop you are logged into is never touched. voxtype and
+// voxtype-audio-bridge are replaced by the scripts in test/shell/bin, which record every call in
+// calls.log. A helper extension (test/shell/helper) reports what is on screen and stands in for the
+// systemd user manager on the test D-Bus, recording service changes in calls.log too.
 //
 // Run with `npm run test:shell`. Set VOXTYPE_OSD_SCREENSHOTS=<dir> to also save screenshots.
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -51,12 +52,7 @@ describe('Voxtype OSD in a headless GNOME Shell', { skip: !hasGnomeShell && 'gno
         chmodSync(path('runtime'), 0o700);
 
         // The built extension, installed the way scripts/install.sh does it.
-        mkdirSync(extensionDir());
-        for (const file of readdirSync(join(ROOT, 'build'))) {
-            if (file.endsWith('.js')) {
-                cpSync(join(ROOT, 'build', file), join(extensionDir(), file));
-            }
-        }
+        cpSync(join(ROOT, 'build'), extensionDir(), { recursive: true });
         for (const file of ['metadata.json', 'stylesheet.css']) {
             cpSync(join(ROOT, file), join(extensionDir(), file));
         }
@@ -348,14 +344,14 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         writeState('idle');
         await waitFor(hidden, 'the indicator to hide');
 
-        assert.deepEqual(calls().filter(call => call.startsWith('systemctl')), []);
+        assert.deepEqual(calls().filter(call => /^(systemd|systemctl) /.test(call)), []);
         assertNoErrors();
     });
 
     test('the panel menu controls voxtype: service switch, dictation, moving the indicator', async () => {
         clearCalls();
         helper('ToggleServiceSwitch');
-        await waitUntil(() => calls().includes('systemctl --user stop voxtype.service'), 'the stop command');
+        await waitUntil(() => calls().includes('systemd StopUnit voxtype.service'), 'the stop command');
         let state = inspect();
         assert.equal(state.indicator.status, 'Stopping Voxtype…');
 
@@ -363,10 +359,10 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         writeState(null);
         await waitFor(s => s.indicator.status === 'Voxtype is stopped', 'the stopped state');
         helper('ToggleServiceSwitch');
-        await waitUntil(() => calls().includes('systemctl --user start voxtype.service'), 'the start command');
+        await waitUntil(() => calls().includes('systemd StartUnit voxtype.service'), 'the start command');
         writeState('idle');
         await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the ready state');
-        assert.deepEqual(calls(), ['systemctl --user stop voxtype.service', 'systemctl --user start voxtype.service']);
+        assert.deepEqual(calls(), ['systemd StopUnit voxtype.service', 'systemd StartUnit voxtype.service']);
 
         clearCalls();
         helper('ActivateMenuItem', 'Start dictation');
@@ -439,6 +435,11 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             assertNoErrors();
         });
     }
+
+    test('never spawns systemctl: voxtype.service is only controlled over D-Bus', () => {
+        const log = path('systemctl-calls.log');
+        assert.equal(existsSync(log) ? readFileSync(log, 'utf8') : '', '');
+    });
 
     // Stops the Settings window process registered on the test bus, and only that one.
     function closeSettings() {

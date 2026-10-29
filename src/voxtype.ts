@@ -2,8 +2,6 @@ import Gio from 'gi://Gio';
 
 // Shared by the shell extension and the preferences window, so only Gio here.
 
-export const SERVICE = 'voxtype.service';
-
 export type CommandResult = {
     ok: boolean;
     stdout: string;
@@ -36,22 +34,6 @@ export function toggleRecording(): Promise<CommandResult> {
     return run(['voxtype', 'record', 'toggle']);
 }
 
-export function setServiceRunning(running: boolean): Promise<CommandResult> {
-    return run(['systemctl', '--user', running ? 'start' : 'stop', SERVICE]);
-}
-
-export function restartService(): Promise<CommandResult> {
-    return run(['systemctl', '--user', 'restart', SERVICE]);
-}
-
-export async function isServiceActive(): Promise<boolean> {
-    return (await run(['systemctl', '--user', 'is-active', '--quiet', SERVICE])).ok;
-}
-
-export async function isServiceEnabled(): Promise<boolean> {
-    return (await run(['systemctl', '--user', 'is-enabled', '--quiet', SERVICE])).ok;
-}
-
-export function setServiceEnabled(enabled: boolean): Promise<CommandResult> {
-    return run(['systemctl', '--user', enabled ? 'enable' : 'disable', SERVICE]);
+export function firstLine(text: string): string {
+    return text.trim().split('\n')[0] ?? '';
 }

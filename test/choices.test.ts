@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { choiceModel, DEFAULT_CHOICE } from '../src/choices.js';
+import { choiceModel, DEFAULT_CHOICE } from '../src/prefs/choices.js';
 
 test('choiceModel selects the current value and labels the choices for people', () => {
     assert.deepEqual(choiceModel(['type', 'clipboard', 'paste_keys'], 'clipboard'), {

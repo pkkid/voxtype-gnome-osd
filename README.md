@@ -47,7 +47,8 @@ click opens a menu with the current status, start/stop dictation, a switch for t
 - **Waveform:** while recording, launches `voxtype-audio-bridge` as a subprocess and reads one JSON line
   per sample (`{"peak": 0.42}`) from its stdout. Classic keeps the loudest peak of each 100 ms as one
   bar; the other styles follow the latest peaks and a smoothed level. Malformed lines are dropped.
-- **Service control:** `systemctl --user start|stop|enable|disable voxtype.service`.
+- **Service control:** starts, stops, enables and disables `voxtype.service` through the systemd user
+  manager's D-Bus API (`org.freedesktop.systemd1`), the same calls `systemctl --user` makes.
 - **Shortcut:** stored as a regular GNOME custom keyboard shortcut whose command is
   `voxtype record toggle`, so it keeps working even if the extension is disabled. The settings window
   edits that shortcut, or creates it if it is missing.

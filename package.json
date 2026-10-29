@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf build && tsc",
     "test": "tsc --noEmit -p . && tsc -p tsconfig.test.json && node --test 'build-test/test/*.test.js'",
     "install-extension": "./scripts/install.sh",
     "pack": "./scripts/pack.sh",

@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Stand-in for systemctl in the shell tests: records the call and pretends voxtype.service exists.
+# Tripwire: the extension talks to systemd over D-Bus, so any systemctl call is a bug. It is
+# recorded in calls.log, which the shell tests compare against exactly, and fails.
 echo "systemctl $*" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
-case "$*" in
-    *is-active*) [ -e "$VOXTYPE_OSD_TEST_DIR/service-active" ] ;;
-    *is-enabled*) exit 1 ;;
-    *start*|*restart*) touch "$VOXTYPE_OSD_TEST_DIR/service-active" ;;
-    *stop*) rm -f "$VOXTYPE_OSD_TEST_DIR/service-active" ;;
-esac
+echo "systemctl $*" >> "$VOXTYPE_OSD_TEST_DIR/systemctl-calls.log"
+exit 1
