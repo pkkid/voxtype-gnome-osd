@@ -81,15 +81,19 @@ npm run pack    # writes dist/voxtype-osd@theoodawara.shell-extension.zip
 ```sh
 npm run build
 npm test            # type check and unit tests, about a second
-npm run test:shell  # the extension in a real, headless GNOME Shell, about 25 seconds
+npm run test:shell  # the extension in a real, headless GNOME Shell, about 30 seconds
 ```
 
 `npm test` covers the pure logic: parsing voxtype's state file and audio levels, the bars and
-waveforms, accent colors, the Voxtype page's dropdowns, and the settings schema. It runs on every push.
+waveforms, accent colors, the Voxtype page's dropdowns, the settings schema, and that the shell and
+Settings processes never import each other's libraries. It runs on every push.
 
 `npm run test:shell` needs `gnome-shell` installed. It starts a headless GNOME Shell with its own D-Bus
-session, settings and runtime directory, so your desktop is not touched, and swaps `voxtype`,
-`systemctl` and `voxtype-audio-bridge` for scripts that record every call. It then checks a full
-dictation, live dictation, every style, live settings changes, the panel menu, that voxtype is never
-started or stopped on its own, clean disable/enable, and that each Settings page opens without errors.
-Set `VOXTYPE_OSD_SCREENSHOTS=<dir>` to also save screenshots of each style and Settings page.
+session, settings and runtime directory, so your desktop is not touched. `voxtype` and
+`voxtype-audio-bridge` are swapped for scripts that record every call, and a helper extension stands in
+for the systemd user manager. It checks a full dictation, live dictation, every style, live settings
+changes, the panel menu, that voxtype is never started or stopped on its own, a misbehaving audio
+bridge, a failing service change, rapid state changes, voxtype starting after the extension, and that
+disabling (even mid-drag or mid-recording) releases the pointer grab, removes every timer, stops the
+audio bridge and leaves nothing reacting to later events. Each Settings page must open without errors.
+Set `VOXTYPE_OSD_SCREENSHOTS=<dir>` to also save screenshots.

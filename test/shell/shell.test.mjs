@@ -10,7 +10,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -103,6 +103,9 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             }
             await Promise.race([exited, sleep(5000)]);
         }
+        // Services the session started (ibus, dconf, the portals) exit once its bus is gone, and may
+        // still write to the test directory on their way out.
+        await waitUntil(() => sessionProcesses().length === 0, 'the test session to exit', 10000).catch(() => {});
         if (dir && !process.env.VOXTYPE_OSD_KEEP_TEST_DIR) {
             // The session's document portal and gvfs mount FUSE filesystems in the runtime directory
             // and may still be unmounting.
@@ -129,15 +132,31 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
     // ───────────────────────── Helpers ─────────────────────────
 
+    // Processes still running inside the test session, found by their runtime directory.
+    function sessionProcesses() {
+        return readdirSync('/proc').filter(pid => /^\d+$/.test(pid)).filter(pid => {
+            try {
+                return readFileSync(`/proc/${pid}/environ`, 'utf8').includes(`XDG_RUNTIME_DIR=${path('runtime')}\0`);
+            } catch {
+                return false;
+            }
+        });
+    }
+
     function touch(name) {
         writeFileSync(path(name), '');
     }
 
-    function writeState(state) {
+    function writeState(state, { atomic = false } = {}) {
+        const file = path('runtime', 'voxtype', 'state');
         if (state === null) {
-            rmSync(path('runtime', 'voxtype', 'state'), { force: true });
+            rmSync(file, { force: true });
+        } else if (atomic) {
+            // Write a temporary file and rename it over the state file, as many programs do.
+            writeFileSync(`${file}.tmp`, `${state}\n`);
+            renameSync(`${file}.tmp`, file);
         } else {
-            writeFileSync(path('runtime', 'voxtype', 'state'), `${state}\n`);
+            writeFileSync(file, `${state}\n`);
         }
     }
 
@@ -159,10 +178,19 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         execFileSync('gsettings', ['--schemadir', join(extensionDir(), 'schemas'), 'reset', SCHEMA_ID, key], { env });
     }
 
-    function pressPanelIcon(button) {
+    // For helper methods that answer true or false.
+    function helperAnswers(method, ...args) {
         const output = execFileSync('gdbus', ['call', '--session', '--dest', 'org.voxtypeosd.TestHelper', '--object-path', '/org/voxtypeosd/TestHelper',
-            '--method', 'org.voxtypeosd.TestHelper.PressPanelIcon', String(button)], { env, encoding: 'utf8' });
+            '--method', `org.voxtypeosd.TestHelper.${method}`, ...args.map(String)], { env, encoding: 'utf8' });
         return output.includes('true');
+    }
+
+    const pressPanelIcon = button => helperAnswers('PressPanelIcon', button);
+    const sourceAlive = id => helperAnswers('SourceAlive', id);
+
+    async function setEnabled(enabled) {
+        helper('SetExtensionEnabled', enabled);
+        await waitFor(s => s.extensionState === (enabled ? ACTIVE : INACTIVE), enabled ? 'the extension to enable' : 'the extension to disable');
     }
 
     function calls() {
@@ -265,12 +293,12 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
     });
 
     test('labels live dictation (streaming) as transcribing, with the mic live', async () => {
-        writeState('streaming');
+        writeState('streaming', { atomic: true });
         const state = await waitFor(s => shown(s) && s.pill.label === 'Transcribing…', 'the streaming indicator');
         assert.match(state.pill.dot.style, new RegExp(RECORDING_DOT));
         await waitUntil(bridgeRunning, 'the audio bridge to start');
 
-        writeState('idle');
+        writeState('idle', { atomic: true });
         await waitFor(hidden, 'the indicator to hide');
         await waitUntil(() => !bridgeRunning(), 'the audio bridge to stop');
         assertNoErrors();
@@ -402,17 +430,145 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
     test('disabling cleans up everything, even mid-recording, and enabling again works', async () => {
         writeState('recording');
-        await waitFor(shown, 'the indicator to appear');
+        const { sources } = await waitFor(s => shown(s) && s.sources.redraw !== 0, 'the indicator to appear and animate');
         await waitUntil(bridgeRunning, 'the audio bridge to start');
 
         helper('SetExtensionEnabled', false);
         await waitFor(s => s.extensionState === INACTIVE && s.indicator === null && s.pill === null, 'everything to be removed');
         await waitUntil(() => !bridgeRunning(), 'the audio bridge to stop');
+        assert.equal(sourceAlive(sources.redraw), false, 'the redraw timer is removed');
 
         helper('SetExtensionEnabled', true);
         await waitFor(s => s.extensionState === ACTIVE && shown(s), 'the extension to come back mid-recording');
         await waitUntil(bridgeRunning, 'the audio bridge to restart');
 
+        writeState('idle');
+        await waitFor(hidden, 'the indicator to hide');
+        assertNoErrors();
+    });
+
+    test('disabling mid-drag, mid-fade and with timers pending leaves nothing behind', async () => {
+        // A service change waiting to be confirmed, the move hint, and a drag all hold resources.
+        helper('ToggleServiceSwitch');
+        helper('ActivateMenuItem', 'Move recording indicator');
+        await waitFor(shown, 'the positioning hint');
+        helper('StartDrag');
+        const before = await waitFor(s => s.grabbedByPill && s.sources.service !== 0 && s.sources.positioning !== 0, 'the grab and timers');
+
+        await setEnabled(false);
+        const after = inspect();
+        assert.equal(after.grabbedByPill, false, 'the pointer grab is released, so input is not stuck');
+        assert.equal(after.pill, null);
+        assert.equal(sourceAlive(before.sources.service), false, 'the service timeout is removed');
+        assert.equal(sourceAlive(before.sources.positioning), false, 'the positioning timeout is removed');
+
+        // Disabling while the indicator is still fading out.
+        touch('service-active');
+        await setEnabled(true);
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear');
+        writeState('idle');
+        await sleep(30);
+        await setEnabled(false);
+        await sleep(500);
+        assertNoErrors();
+
+        await setEnabled(true);
+        await waitFor(s => s.indicator?.status === 'Voxtype is ready' && hidden(s), 'the extension to settle');
+        assertNoErrors();
+    });
+
+    test('nothing reacts once disabled: settings, monitors and state changes', async () => {
+        await setEnabled(false);
+        setSetting('accent-color', '#3584e4');
+        setSetting('pill-style', 'wave');
+        setSetting('show-pill', false);
+        setSetting('pill-x', 0.2);
+        helper('EmitMonitorsChanged');
+        writeState('recording');
+        await sleep(800);
+
+        const state = inspect();
+        assert.equal(state.pill, null);
+        assert.equal(state.indicator, null);
+        assert.equal(bridgeRunning(), false);
+        assertNoErrors();
+
+        writeState('idle');
+        for (const key of ['accent-color', 'pill-style', 'show-pill', 'pill-x']) {
+            resetSetting(key);
+        }
+        await setEnabled(true);
+        await waitFor(s => s.indicator?.status === 'Voxtype is ready', 'the extension to come back');
+        assertNoErrors();
+    });
+
+    test('moves with monitor changes while showing', async () => {
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear');
+        helper('EmitMonitorsChanged');
+        await sleep(200);
+        assert.ok(shown(inspect()));
+        writeState('idle');
+        await waitFor(hidden, 'the indicator to hide');
+        assertNoErrors();
+    });
+
+    test('survives a misbehaving audio bridge: junk output, or crashing on start', async () => {
+        writeFileSync(path('bridge-mode'), 'garbage');
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear');
+        await waitUntil(bridgeRunning, 'the audio bridge to start');
+        await sleep(600);
+        writeState('idle');
+        await waitFor(hidden, 'the indicator to hide');
+        assertNoErrors();
+
+        writeFileSync(path('bridge-mode'), 'exit');
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear without a bridge');
+        await sleep(600);
+        assert.ok(shown(inspect()), 'the indicator stays up');
+        writeState('idle');
+        await waitFor(hidden, 'the indicator to hide');
+        rmSync(path('bridge-mode'));
+        assertNoErrors();
+    });
+
+    test('reports a failing service change and clears the pending state', async () => {
+        touch('systemd-fails');
+        helper('ToggleServiceSwitch');
+        await waitFor(s => s.indicator.status === 'Voxtype is ready' && s.indicator.serviceSwitch === true, 'the menu to recover');
+        const errors = newErrors();
+        rmSync(path('systemd-fails'));
+
+        assert.equal(errors.length, 1, `expected one error notification, got ${JSON.stringify(errors)}`);
+        assert.match(errors[0], /Could not stop the voxtype service/);
+    });
+
+    test('keeps up with rapid state changes without leaking audio bridges', async () => {
+        for (let round = 0; round < 25; round += 1) {
+            writeState(round % 5 === 4 ? 'transcribing' : 'recording');
+            await sleep(40);
+            writeState('idle');
+            await sleep(40);
+        }
+        await waitFor(hidden, 'the indicator to settle hidden');
+        await waitUntil(() => !bridgeRunning(), 'every audio bridge to stop');
+        assertNoErrors();
+    });
+
+    test('picks up voxtype starting after the extension, as at login', async () => {
+        await setEnabled(false);
+        rmSync(path('runtime', 'voxtype'), { recursive: true, force: true });
+        await setEnabled(true);
+        await waitFor(s => s.indicator?.status === 'Voxtype is stopped', 'the stopped state');
+
+        mkdirSync(path('runtime', 'voxtype'));
+        writeState('idle');
+        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'voxtype to be noticed', 15000);
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear');
         writeState('idle');
         await waitFor(hidden, 'the indicator to hide');
         assertNoErrors();

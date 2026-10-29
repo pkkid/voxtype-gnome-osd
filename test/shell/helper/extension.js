@@ -22,6 +22,12 @@ const INTERFACE = `
     <method name="ToggleServiceSwitch"/>
     <method name="ActivateMenuItem"><arg type="s" direction="in" name="label"/></method>
     <method name="CloseMenu"/>
+    <method name="StartDrag"/>
+    <method name="EmitMonitorsChanged"/>
+    <method name="SourceAlive">
+      <arg type="u" direction="in" name="id"/>
+      <arg type="b" direction="out" name="alive"/>
+    </method>
     <method name="SetExtensionEnabled"><arg type="b" direction="in" name="enabled"/></method>
     <method name="Screenshot">
       <arg type="s" direction="in" name="path"/>
@@ -192,10 +198,27 @@ function describeIndicator(button) {
     };
 }
 
+// The running Extension object, to reach the timers it keeps.
+function extensionObject() {
+    return Main.extensionManager.lookup(UUID)?.stateObj ?? null;
+}
+
+function pendingSources() {
+    const extension = extensionObject();
+    return {
+        service: extension?.serviceTimeoutId ?? 0,
+        positioning: extension?.pill?.positioningTimeoutId ?? 0,
+        redraw: extension?.pill?.waveform?.redrawSourceId ?? 0,
+    };
+}
+
 function inspect() {
     const pill = findPill();
     const button = indicator();
+    const grab = global.stage.get_grab_actor();
     return {
+        sources: pendingSources(),
+        grabbedByPill: grab !== null && grab === pill,
         extensionState: Main.extensionManager.lookup(UUID)?.state ?? null,
         indicator: button === null ? null : describeIndicator(button),
         pill: pill === null ? null : describePill(pill),
@@ -271,6 +294,20 @@ export default class TestHelper extends Extension {
 
     CloseMenu() {
         indicator()?.menu.close(false);
+    }
+
+    // Puts the pill into the middle of a drag, holding the same stage grab a real press takes.
+    StartDrag() {
+        const pill = extensionObject().pill;
+        pill.drag = { grab: global.stage.grab(pill.container), offsetX: 0, offsetY: 0 };
+    }
+
+    EmitMonitorsChanged() {
+        Main.layoutManager.emit('monitors-changed');
+    }
+
+    SourceAlive(id) {
+        return id !== 0 && GLib.MainContext.default().find_source_by_id(id) !== null;
     }
 
     SetExtensionEnabled(enabled) {

@@ -4,6 +4,5 @@
   "description": "Recording indicator, on-screen waveform, panel menu and settings for the voxtype speech-to-text daemon.",
   "shell-version": ["50", "51"],
   "settings-schema": "org.gnome.shell.extensions.voxtype-osd",
-  "url": "https://github.com/pkkid/voxtype-gnome-osd",
-  "version": 2
+  "version": 1
 }
