@@ -9,6 +9,10 @@ import { DaemonState, isRecording } from './daemonState.js';
 const STATE_STYLE_CLASSES = ['voxtype-indicator-recording', 'voxtype-indicator-transcribing'];
 const STOPPED_ICON_OPACITY = 115;
 
+// GNOME 50 opens the menu from PanelMenu.Button.vfunc_event. GNOME 51 uses a click gesture instead and
+// has no vfunc_event to chain up to: calling it throws on every event the indicator passes along.
+const BUTTON_HAS_EVENT_HANDLER = Object.hasOwn(PanelMenu.Button.prototype, 'vfunc_event');
+
 const STATUS_LABELS: Record<DaemonState, string> = {
     unavailable: 'Voxtype is stopped',
     idle: 'Voxtype is ready',
@@ -68,7 +72,7 @@ export const PanelIndicator = GObject.registerClass(
                 this.handlers?.toggleRecording();
                 return Clutter.EVENT_STOP;
             }
-            return super.vfunc_event(event);
+            return BUTTON_HAS_EVENT_HANDLER ? super.vfunc_event(event) : Clutter.EVENT_PROPAGATE;
         }
 
         setState(state: DaemonState) {
