@@ -33,6 +33,7 @@ export const PanelIndicator = GObject.registerClass(
         private declare state: DaemonState;
         private declare pendingServiceState: boolean | null;
         private declare showWhenStopped: boolean;
+        private declare accentColor: string | null;
         declare leftClickToggles: boolean;
 
         _init() {
@@ -42,6 +43,7 @@ export const PanelIndicator = GObject.registerClass(
             this.pendingServiceState = null;
             this.showWhenStopped = true;
             this.leftClickToggles = true;
+            this.accentColor = null;
 
             this.icon = new St.Icon({
                 style_class: 'system-status-icon voxtype-indicator',
@@ -80,6 +82,7 @@ export const PanelIndicator = GObject.registerClass(
             if (running && state !== 'idle') {
                 this.icon.add_style_class_name(`voxtype-indicator-${state}`);
             }
+            this.syncAccentColor();
 
             this.syncVisibility();
             this.syncMenu();
@@ -90,9 +93,20 @@ export const PanelIndicator = GObject.registerClass(
             this.syncMenu();
         }
 
+        setAccentColor(color: string) {
+            this.accentColor = color;
+            this.syncAccentColor();
+        }
+
         setShowWhenStopped(show: boolean) {
             this.showWhenStopped = show;
             this.syncVisibility();
+        }
+
+        // The stylesheet's red is only a fallback; an inline style wins over it.
+        private syncAccentColor() {
+            const recording = this.state === 'recording' && this.accentColor !== null;
+            this.icon.set_style(recording ? `color: ${this.accentColor};` : null);
         }
 
         private syncVisibility() {

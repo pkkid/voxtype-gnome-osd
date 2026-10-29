@@ -18,6 +18,11 @@
       <default>true</default>
       <summary>Draw a live waveform inside the recording indicator</summary>
     </key>
+    <key name="accent-color" type="s">
+      <default>'#f2594d'</default>
+      <summary>Accent color shown while recording, as #rrggbb</summary>
+      <description>Used for the recording indicator's border, icon and waveform, and the panel icon.</description>
+    </key>
     <key name="pill-x" type="d">
       <range min="0" max="1"/>
       <default>0.5</default>

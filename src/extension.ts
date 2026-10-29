@@ -4,6 +4,7 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { AudioBridge } from './audioBridge.js';
+import { accentColor } from './color.js';
 import { DaemonState, DaemonStateWatcher } from './daemonState.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
@@ -41,6 +42,7 @@ export default class VoxtypeOsdExtension extends Extension {
         this.settingsIds = [
             this.settings.connect('changed::left-click-toggles', () => this.applySettings()),
             this.settings.connect('changed::show-when-stopped', () => this.applySettings()),
+            this.settings.connect('changed::accent-color', () => this.applySettings()),
             this.settings.connect('changed::show-pill', () => this.applyState(this.state)),
             this.settings.connect('changed::show-waveform', () => this.applyState(this.state)),
         ];
@@ -80,6 +82,7 @@ export default class VoxtypeOsdExtension extends Extension {
 
         this.indicator.leftClickToggles = this.settings.get_boolean('left-click-toggles');
         this.indicator.setShowWhenStopped(this.settings.get_boolean('show-when-stopped'));
+        this.indicator.setAccentColor(accentColor(this.settings.get_string('accent-color')));
     }
 
     private applyState(state: DaemonState) {

@@ -5,6 +5,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import { accentColor, parseHexColor, Rgb } from './color.js';
 import { DaemonState } from './daemonState.js';
 import { AudioSample } from './levels.js';
 import { Waveform } from './waveform.js';
@@ -20,10 +21,7 @@ const STATE_LABELS: Partial<Record<DaemonState, string>> = {
     transcribing: 'Transcribing…',
 };
 
-const WAVEFORM_COLORS: Partial<Record<DaemonState, [number, number, number]>> = {
-    recording: [0.949, 0.349, 0.302],
-    transcribing: [0.949, 0.8, 0.302],
-};
+const TRANSCRIBING_COLOR: Rgb = [0.949, 0.8, 0.302];
 
 type Drag = {
     grab: Clutter.Grab;
@@ -82,6 +80,7 @@ export class OsdPill {
         }
         this.signalIds.push(this.settings.connect('changed::show-pill', () => this.render()));
         this.signalIds.push(this.settings.connect('changed::show-waveform', () => this.render()));
+        this.signalIds.push(this.settings.connect('changed::accent-color', () => this.render()));
 
         this.reposition();
     }
@@ -145,6 +144,8 @@ export class OsdPill {
         this.container.remove_style_class_name('voxtype-pill-recording');
         this.container.remove_style_class_name('voxtype-pill-transcribing');
         this.container.remove_style_class_name('voxtype-pill-positioning');
+        this.container.set_style(null);
+        this.icon.set_style(null);
 
         const label = STATE_LABELS[this.state];
         if (label !== undefined && this.settings.get_boolean('show-pill')) {
@@ -152,9 +153,14 @@ export class OsdPill {
             this.label.set_text(label);
             this.waveform.actor.visible = this.settings.get_boolean('show-waveform');
 
-            const color = WAVEFORM_COLORS[this.state];
-            if (color !== undefined) {
-                this.waveform.setColor(color[0], color[1], color[2]);
+            if (this.state === 'recording') {
+                // The stylesheet's red is only a fallback; inline styles win over it.
+                const accent = accentColor(this.settings.get_string('accent-color'));
+                this.container.set_style(`border-color: ${accent};`);
+                this.icon.set_style(`color: ${accent};`);
+                this.waveform.setColor(...(parseHexColor(accent) as Rgb));
+            } else {
+                this.waveform.setColor(...TRANSCRIBING_COLOR);
             }
 
             this.show();

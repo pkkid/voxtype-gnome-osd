@@ -6,16 +6,17 @@ panel menu to control the voxtype service, and a settings window.
 
 ## Features
 
-- **Panel icon:** red while dictating, yellow while transcribing, a dimmed crossed-out microphone while
+- **Panel icon:** the accent color (red by default) while dictating, yellow while transcribing, a dimmed crossed-out microphone while
   the voxtype service is stopped.
   - Left click starts and stops dictation (can be turned off in settings).
   - Right click opens a menu: current status, start/stop dictation, a switch for the voxtype service,
     "Move recording indicator" and Settings.
 - **Recording indicator:** an on-screen pill with a live waveform. Drag it to move it; the position is
   remembered. "Move recording indicator" shows it for 20 seconds so it can be moved without recording.
+  Its accent color (border, icon and waveform while dictating) can be changed in settings.
 - **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
-  - **General:** run voxtype now / at login, the dictation shortcut, left-click behaviour, and what the
-    indicators show.
+  - **General:** run voxtype now / at login, the dictation shortcut, left-click behaviour, what the
+    indicators show, and their accent color.
   - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device,
     max recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
     descriptions, types and ranges come from `voxtype config schema --json`; changes are written with
