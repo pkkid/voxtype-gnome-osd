@@ -34,14 +34,11 @@ export class AudioBridge {
     }
 
     stop(): void {
+        // A read is always pending, so closing the stream synchronously fails with
+        // "Stream has outstanding operation". Cancelling the read and killing the
+        // bridge closes the pipe from the other end instead.
         this.cancellable?.cancel();
         this.cancellable = null;
-
-        try {
-            this.stream?.close(null);
-        } catch (error) {
-            logError(error as Error, 'voxtype-osd: could not close the bridge pipe');
-        }
         this.stream = null;
 
         this.process?.force_exit();

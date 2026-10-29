@@ -12,6 +12,11 @@ function stateFilePath(): string {
 function toDaemonState(contents: string): DaemonState {
     const trimmed = contents.trim();
 
+    // Live dictation ([parakeet] streaming = true) reports 'streaming' instead of 'recording'.
+    if (trimmed === 'streaming') {
+        return 'recording';
+    }
+
     for (const candidate of KNOWN_STATES) {
         if (candidate === trimmed) {
             return candidate;
