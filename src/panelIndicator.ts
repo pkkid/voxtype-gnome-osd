@@ -32,6 +32,7 @@ export const PanelIndicator = GObject.registerClass(
         private declare serviceItem: PopupMenu.PopupSwitchMenuItem;
         private declare state: DaemonState;
         private declare pendingServiceState: boolean | null;
+        private declare syncingServiceItem: boolean;
         private declare showWhenStopped: boolean;
         private declare accentColor: string | null;
         declare leftClickToggles: boolean;
@@ -41,6 +42,7 @@ export const PanelIndicator = GObject.registerClass(
             this.handlers = null;
             this.state = 'unavailable';
             this.pendingServiceState = null;
+            this.syncingServiceItem = false;
             this.showWhenStopped = true;
             this.leftClickToggles = true;
             this.accentColor = null;
@@ -127,6 +129,9 @@ export const PanelIndicator = GObject.registerClass(
 
             this.serviceItem = new PopupMenu.PopupSwitchMenuItem('Voxtype service', false);
             this.serviceItem.connect('toggled', (_item, running: boolean) => {
+                if (this.syncingServiceItem) {
+                    return;
+                }
                 this.pendingServiceState = running;
                 this.syncMenu();
                 this.handlers?.setServiceRunning(running);
@@ -155,7 +160,11 @@ export const PanelIndicator = GObject.registerClass(
                 this.statusItem.label.text = STATUS_LABELS[this.state];
             }
 
+            // GNOME 51 emits 'toggled' for programmatic changes too, which would otherwise start or
+            // stop the service every time voxtype's state changes on its own.
+            this.syncingServiceItem = true;
             this.serviceItem.setToggleState(this.pendingServiceState ?? running);
+            this.syncingServiceItem = false;
             this.dictationItem.visible = running;
             this.dictationItem.label.text = this.state === 'recording' ? 'Stop dictation' : 'Start dictation';
         }
