@@ -12,7 +12,7 @@ function stateFilePath(): string {
 export class DaemonStateWatcher {
     private readonly file: Gio.File;
     private readonly onChange: (state: DaemonState) => void;
-    private directoryMonitor: Gio.FileMonitor | null = null;
+    private monitor: Gio.FileMonitor | null = null;
     private cancellable: Gio.Cancellable | null = null;
     private current: DaemonState = 'unavailable';
 
@@ -24,20 +24,15 @@ export class DaemonStateWatcher {
     start(): void {
         this.cancellable = new Gio.Cancellable();
 
-        const directory = this.file.get_parent();
-        if (directory !== null) {
-            try {
-                this.directoryMonitor = directory.monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, null);
-            } catch (error) {
-                logError(error as Error, 'voxtype-osd: could not watch the voxtype runtime directory');
-                this.directoryMonitor = null;
-            }
-
-            this.directoryMonitor?.connect('changed', (_monitor, changed) => {
-                if (changed.get_basename() === this.file.get_basename()) {
-                    this.reload();
-                }
-            });
+        // Watch the state file itself rather than its directory: at login the shell can start before
+        // voxtype creates $XDG_RUNTIME_DIR/voxtype, and a file monitor keeps waiting for it to appear,
+        // while a directory monitor only reports the directory showing up, not the file inside it.
+        try {
+            this.monitor = this.file.monitor_file(Gio.FileMonitorFlags.WATCH_MOVES, null);
+            this.monitor.connect('changed', () => this.reload());
+        } catch (error) {
+            logError(error as Error, 'voxtype-osd: could not watch the voxtype state file');
+            this.monitor = null;
         }
 
         this.reload();
@@ -47,8 +42,8 @@ export class DaemonStateWatcher {
         this.cancellable?.cancel();
         this.cancellable = null;
 
-        this.directoryMonitor?.cancel();
-        this.directoryMonitor = null;
+        this.monitor?.cancel();
+        this.monitor = null;
     }
 
     private reload(): void {
