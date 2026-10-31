@@ -32,7 +32,8 @@ click opens a menu with the current status, start/stop dictation, a switch for t
   how the panel icon behaves. The shortcut is saved to voxtype's own `[hotkey]` config and voxtype is
   restarted to apply it: a GNOME shortcut never sees the key being released, so it cannot do
   push-to-talk, and while held it repeats and turns dictation on and off.
-- **Indicator:** show or hide the indicator, its style, the waveform, the accent color and its position.
+- **Indicator:** show or hide the indicator and voxtype's own display (`osd.enabled`), the indicator's
+  style, the waveform, the accent color and its position.
 - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device, max
   recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
   descriptions, types and ranges come from `voxtype config schema --json`; changes are written with

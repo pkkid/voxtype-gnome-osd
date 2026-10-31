@@ -5,9 +5,11 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 
 import { accentColor, parseHexColor, rgbToHex } from '../color.js';
+import { run } from '../voxtype.js';
 import { buildStylePickerGroup } from './stylePicker.js';
+import { restartIfRunning, setConfig } from './voxtypeConfig.js';
 
-export function buildIndicatorPage(settings: Gio.Settings): Adw.PreferencesPage {
+export function buildIndicatorPage(window: Adw.PreferencesWindow, settings: Gio.Settings): Adw.PreferencesPage {
     const page = new Adw.PreferencesPage({
         name: 'indicator',
         title: 'Indicator',
@@ -21,6 +23,7 @@ export function buildIndicatorPage(settings: Gio.Settings): Adw.PreferencesPage 
     });
     settings.bind('show-pill', pillRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     showGroup.add(pillRow);
+    showGroup.add(buildVoxtypeDisplayRow(window));
     page.add(showGroup);
 
     const styleGroup = buildStylePickerGroup(settings, 'pill-style');
@@ -56,6 +59,41 @@ export function buildIndicatorPage(settings: Gio.Settings): Adw.PreferencesPage 
     lookGroup.add(positionRow);
 
     return page;
+}
+
+// Voxtype's own floating panel. It reads voxtype's config, so it stays hidden if voxtype cannot answer.
+function buildVoxtypeDisplayRow(window: Adw.PreferencesWindow): Adw.SwitchRow {
+    const row = new Adw.SwitchRow({
+        title: 'Show Voxtype\'s own display',
+        subtitle: 'The floating waveform panel from Voxtype itself, shown alongside this indicator. Changing this restarts Voxtype.',
+        visible: false,
+    });
+
+    run(['voxtype', 'config', 'get', 'osd.enabled']).then(result => {
+        if (!result.ok) {
+            return;
+        }
+
+        row.active = result.stdout.trim() === 'true';
+        row.visible = true;
+
+        let reverting = false;
+        row.connect('notify::active', async () => {
+            if (reverting) {
+                return;
+            }
+
+            if (await setConfig(window, 'osd.enabled', row.active ? 'true' : 'false')) {
+                await restartIfRunning(window);
+            } else {
+                reverting = true;
+                row.active = !row.active;
+                reverting = false;
+            }
+        });
+    });
+
+    return row;
 }
 
 function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {

@@ -4,5 +4,6 @@ echo "voxtype $*" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
 FIXTURES="$(dirname "$(readlink -f "$0")")/../fixtures"
 case "$*" in
     "config schema --json") cat "$FIXTURES/voxtype-schema.json" ;;
+    "config get osd.enabled") echo true ;;
     "info devices --json") cat "$FIXTURES/voxtype-devices.json" ;;
 esac

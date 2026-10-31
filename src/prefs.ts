@@ -17,7 +17,7 @@ export default class VoxtypeOsdPreferences extends ExtensionPreferences {
             iconName: 'audio-input-microphone-symbolic',
         }, [
             buildGeneralPage(window, settings),
-            buildIndicatorPage(settings),
+            buildIndicatorPage(window, settings),
             buildVoxtypePage(window),
         ]);
     }
