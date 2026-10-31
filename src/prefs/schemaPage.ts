@@ -56,6 +56,11 @@ export const NOTIFICATIONS_PAGE: SchemaPageContent = {
     ],
 };
 
+// Facts voxtype's own descriptions leave out.
+const DESCRIPTION_NOTES: Record<string, string> = {
+    'whisper.streaming': 'Voxtype requires Toggle for this, so your shortcut becomes press to start, press again to stop.',
+};
+
 type SchemaValue = string | number | boolean | null;
 
 type SchemaKey = {
@@ -108,6 +113,12 @@ async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.Preferenc
     }
 
     const schema = JSON.parse(schemaResult.stdout) as VoxtypeSchema;
+    for (const entry of schema.keys) {
+        if (entry.key in DESCRIPTION_NOTES) {
+            entry.description = `${entry.description} ${DESCRIPTION_NOTES[entry.key]}`;
+        }
+    }
+
     const activeEngine = schema.keys.find(entry => entry.key === 'engine')?.value ?? null;
     const applies = (entry: SchemaKey) => entry.compiled && (!entry.engine || activeEngine === null || entry.engine === activeEngine);
     const keys = new Map(schema.keys.filter(applies).map(entry => [entry.key, entry]));

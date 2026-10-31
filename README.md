@@ -62,6 +62,8 @@ are written with `voxtype config set`, and a banner offers to restart voxtype wh
 - **GPU:** the `voxtype` launcher starts the Vulkan build when `VOXTYPE_GPU=1` is set, which needs no
   root. The switch adds that to the service in a systemd drop-in, `voxtype-osd-gpu.conf`, and deletes the
   file to turn it off. `voxtype info accel` reports where the daemon really ended up.
+- **Live transcription:** voxtype runs it in toggle mode even when `hotkey.mode` is `push_to_talk`, so
+  the General page shows Toggle while it is on, without changing the saved setting.
 - **Text cleanup:** voxtype has no cleanup model of its own, only `output.post_process.command`, a shell
   command the text is piped through, so any script or LLM service works. If Ollama has models, choosing
   one fills in an `ollama run` command.

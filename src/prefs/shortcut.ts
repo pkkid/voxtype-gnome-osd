@@ -19,6 +19,9 @@ const TOGGLE_COMMAND = 'voxtype record toggle';
 
 const INPUT_DEVICE = '/dev/input/event0';
 
+const MODE_SUBTITLE = 'Push to talk records while the keys are held. Toggle starts and stops on separate presses.';
+const FORCED_MODE_SUBTITLE = 'Voxtype requires Toggle for live transcription: typing while keys are held can leave recording stuck on. Press the keys once to start and again to stop.';
+
 // Used for a modifier held before the dialog saw it pressed, and for Super, whose press GNOME Shell
 // keeps to itself. The mask cannot tell left from right.
 const MASK_MODIFIERS: [Gdk.ModifierType, string, string][] = [
@@ -117,15 +120,39 @@ async function fillShortcutGroup(window: Adw.PreferencesWindow, group: Adw.Prefe
     if (modeModel !== null) {
         const modeRow = new Adw.ComboRow({
             title: 'Activation mode',
-            subtitle: 'Push to talk records while the keys are held. Toggle starts and stops on separate presses. Live transcription always uses Toggle.',
+            subtitle: MODE_SUBTITLE,
             model: Gtk.StringList.new(modeModel.labels),
             selected: modeModel.selected,
         });
+
+        let chosen = modeModel.selected;
+        let syncing = false;
         modeRow.connect('notify::selected', async () => {
             const value = modeModel.values[modeRow.selected];
+            if (syncing) {
+                return;
+            }
+
+            chosen = modeRow.selected;
             if (value !== null && value !== undefined && await setConfig(window, 'hotkey.mode', value)) {
                 await restartIfRunning(window);
             }
+        });
+
+        // Voxtype runs live transcription in toggle mode whatever the config says, and only says so in
+        // its log. Show what the hotkey really does, without changing the saved setting.
+        const showRealMode = async () => {
+            const streaming = await run(['voxtype', 'config', 'get', `${entries.get('engine')?.value}.streaming`]);
+            const forced = streaming.ok && streaming.stdout.trim() === 'true';
+
+            syncing = true;
+            modeRow.selected = forced ? Math.max(0, modeModel.values.indexOf('toggle')) : chosen;
+            syncing = false;
+            modeRow.sensitive = !forced;
+            modeRow.subtitle = forced ? FORCED_MODE_SUBTITLE : MODE_SUBTITLE;
+        };
+        group.connect('map', () => {
+            showRealMode().catch(error => logError(error as Error, 'voxtype-osd: could not check live transcription'));
         });
         group.add(modeRow);
     }
