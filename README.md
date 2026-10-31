@@ -28,7 +28,10 @@ click opens a menu with the current status, start/stop dictation, a switch for t
 
 **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
 
-- **General:** run voxtype now / at login, the dictation shortcut, and how the panel icon behaves.
+- **General:** run voxtype now / at login, the dictation shortcut and whether it is held or tapped, and
+  how the panel icon behaves. The shortcut is saved to voxtype's own `[hotkey]` config and voxtype is
+  restarted to apply it: a GNOME shortcut never sees the key being released, so it cannot do
+  push-to-talk, and while held it repeats and turns dictation on and off.
 - **Indicator:** show or hide the indicator, its style, the waveform, the accent color and its position.
 - **Voxtype:** a curated set of voxtype's own options (live typing, delivery mode, input device, max
   recording length, media pausing, sound cues, notifications, on-demand model loading). Labels,
@@ -49,15 +52,17 @@ click opens a menu with the current status, start/stop dictation, a switch for t
   bar; the other styles follow the latest peaks and a smoothed level. Malformed lines are dropped.
 - **Service control:** starts, stops, enables and disables `voxtype.service` through the systemd user
   manager's D-Bus API (`org.freedesktop.systemd1`), the same calls `systemctl --user` makes.
-- **Shortcut:** stored as a regular GNOME custom keyboard shortcut whose command is
-  `voxtype record toggle`, so it keeps working even if the extension is disabled. The settings window
-  edits that shortcut, or creates it if it is missing.
+- **Shortcut:** read from and saved to voxtype's `[hotkey]` config, so it keeps working even if the
+  extension is disabled. `key`, `mode` and `enabled` go through `voxtype config set`. That command does
+  not allow `modifiers`, so the settings window edits that one line of the config file itself. A GNOME
+  custom shortcut running `voxtype record toggle` left by an older version is offered for removal.
 - The subprocess and the file monitor are cancelled on `disable()`, so nothing outlives the extension.
 
 ## Requirements
 
 - GNOME Shell 50 or 51
 - voxtype running as a systemd user service (`voxtype.service`)
+- membership of the `input` group, which voxtype's hotkey needs to read the keyboard
 - `voxtype-audio-bridge` on `PATH` (shipped with voxtype)
 
 ## Install

@@ -1,11 +1,10 @@
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import Gtk from 'gi://Gtk';
 
 import { isServiceActive, isServiceEnabled, setServiceEnabled, setServiceRunning } from '../systemd.js';
 import { firstLine } from '../voxtype.js';
-import { captureShortcut, ensureToggleBinding, findToggleBinding } from './shortcut.js';
+import { buildShortcutGroup } from './shortcut.js';
 import { showToast } from './window.js';
 
 const SERVICE_POLL_SECS = 2;
@@ -80,31 +79,6 @@ function buildServiceGroup(window: Adw.PreferencesWindow): Adw.PreferencesGroup 
         GLib.source_remove(pollId);
         return false;
     });
-
-    return group;
-}
-
-function buildShortcutGroup(window: Adw.PreferencesWindow): Adw.PreferencesGroup {
-    const group = new Adw.PreferencesGroup({ title: 'Shortcut' });
-
-    const shortcutLabel = new Gtk.ShortcutLabel({
-        accelerator: findToggleBinding()?.get_string('binding') ?? '',
-        disabled_text: 'Not set',
-        valign: Gtk.Align.CENTER,
-    });
-    const shortcutRow = new Adw.ActionRow({
-        title: 'Dictation shortcut',
-        subtitle: 'Starts and stops dictation from any app. Saved as a GNOME keyboard shortcut.',
-        activatable: true,
-    });
-    shortcutRow.add_suffix(shortcutLabel);
-    shortcutRow.connect('activated', () => {
-        captureShortcut(window, accelerator => {
-            ensureToggleBinding().set_string('binding', accelerator);
-            shortcutLabel.accelerator = accelerator;
-        });
-    });
-    group.add(shortcutRow);
 
     return group;
 }

@@ -3,6 +3,51 @@
   "keys": [
     {
       "compiled": true,
+      "engine": null,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Hotkey",
+      "key": "hotkey.enabled",
+      "label": "Built-in hotkey listener",
+      "description": "Watch the keyboard via evdev.",
+      "type": "bool",
+      "value": true
+    },
+    {
+      "compiled": true,
+      "engine": null,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Hotkey",
+      "key": "hotkey.key",
+      "label": "Push-to-talk key",
+      "description": "evdev KEY_* name without the prefix.",
+      "type": "enum",
+      "choices": [
+        "SCROLLLOCK",
+        "F13"
+      ],
+      "open": true,
+      "value": "EVTEST_32"
+    },
+    {
+      "compiled": true,
+      "engine": null,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Hotkey",
+      "key": "hotkey.mode",
+      "label": "Activation mode",
+      "description": "push_to_talk records while the key is held; toggle starts and stops on separate taps.",
+      "type": "enum",
+      "choices": [
+        "push_to_talk",
+        "toggle"
+      ],
+      "value": "push_to_talk"
+    },
+    {
+      "compiled": true,
       "description": "Load the model when recording starts and unload at idle, trading first-keystroke latency for memory.",
       "engine": "parakeet",
       "file_value": null,
