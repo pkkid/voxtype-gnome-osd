@@ -19,6 +19,11 @@ export function restartService(): Promise<CommandResult> {
     return attempt(() => callManager('RestartUnit', new GLib.Variant('(ss)', [SERVICE, 'replace'])));
 }
 
+// Same meaning as `systemctl --user daemon-reload`.
+export function reloadUnits(): Promise<CommandResult> {
+    return attempt(() => callManager('Reload', null));
+}
+
 // Same meaning as `systemctl --user enable|disable`, including the daemon reload it does afterwards.
 export function setServiceEnabled(enabled: boolean): Promise<CommandResult> {
     return attempt(async () => {
@@ -39,6 +44,19 @@ export async function isServiceActive(): Promise<boolean> {
         return state === 'active' || state === 'reloading';
     } catch {
         return false;
+    }
+}
+
+// The memory the whole service holds, or null while it is stopped. systemd reports the highest
+// possible value when it has no figure.
+export async function serviceMemory(): Promise<number | null> {
+    try {
+        const [unitPath] = (await callManager('LoadUnit', new GLib.Variant('(s)', [SERVICE]))).deepUnpack<[string]>();
+        const [bytes] = (await call(unitPath, 'org.freedesktop.DBus.Properties', 'Get',
+            new GLib.Variant('(ss)', ['org.freedesktop.systemd1.Service', 'MemoryCurrent']))).recursiveUnpack<[number]>();
+        return bytes < Number.MAX_SAFE_INTEGER && await isServiceActive() ? bytes : null;
+    } catch {
+        return null;
     }
 }
 

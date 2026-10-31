@@ -45,7 +45,7 @@ export const PanelIndicator = GObject.registerClass(
             this.pendingServiceState = null;
             this.syncingServiceItem = false;
             this.showWhenStopped = true;
-            this.leftClickToggles = true;
+            this.leftClickToggles = false;
             this.accentColor = null;
 
             this.icon = new St.Icon({

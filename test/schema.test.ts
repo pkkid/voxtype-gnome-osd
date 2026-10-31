@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { DEFAULT_ACCENT_COLOR } from '../src/color.js';
 import { INDICATOR_STYLES } from '../src/styles.js';
 
 // Compiled to build-test/test/, so the project root is two levels up.
@@ -24,4 +25,10 @@ test('the schema offers exactly the indicator styles the code draws', () => {
 
     assert.deepEqual(choices, [...INDICATOR_STYLES]);
     assert.match(key, /<default>'classic'<\/default>/);
+});
+
+test('the schema and the code agree on the default accent color', () => {
+    const key = SCHEMA.match(/<key name="accent-color"[\s\S]*?<\/key>/)?.[0] ?? '';
+
+    assert.match(key, new RegExp(`<default>'${DEFAULT_ACCENT_COLOR}'</default>`));
 });

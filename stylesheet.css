@@ -32,7 +32,7 @@
 /* ───── Classic ───── */
 
 .voxtype-pill-classic {
-    border: 2px solid #f2594d;
+    border: 2px solid #c0bfbc;
     border-radius: 12px;
     padding: 0 16px;
     spacing: 14px;
@@ -120,5 +120,5 @@
 
 .voxtype-indicator-recording,
 .voxtype-indicator-transcribing {
-    color: #f2594d;
+    color: #c0bfbc;
 }

@@ -5,5 +5,9 @@ FIXTURES="$(dirname "$(readlink -f "$0")")/../fixtures"
 case "$*" in
     "config schema --json") cat "$FIXTURES/voxtype-schema.json" ;;
     "config get osd.enabled") echo true ;;
+    "info models --json") cat "$FIXTURES/voxtype-models.json" ;;
+    "info models") echo "Model catalog  ($VOXTYPE_OSD_TEST_DIR/models)" ;;
+    "info variants --json") echo '{"variants":[{"variant":"whisper-vulkan","installed":true,"runs_on_this_cpu":true,"gpu_available":true}]}' ;;
+    "info accel --json") echo '{"state":"cpu-only"}' ;;
     "info devices --json") cat "$FIXTURES/voxtype-devices.json" ;;
 esac

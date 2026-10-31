@@ -1,0 +1,50 @@
+{
+  "engines": {
+    "moonshine": {
+      "default": "base",
+      "models": [
+        {
+          "download_arg": "moonshine-base",
+          "downloadable": true,
+          "installed": false,
+          "name": "base"
+        }
+      ]
+    },
+    "parakeet": {
+      "default": "parakeet-tdt-0.6b-v3",
+      "models": [
+        {
+          "download_arg": "parakeet-tdt-0.6b-v3",
+          "downloadable": true,
+          "installed": true,
+          "name": "parakeet-tdt-0.6b-v3"
+        }
+      ]
+    },
+    "whisper": {
+      "default": "base.en",
+      "models": [
+        {
+          "download_arg": "tiny",
+          "downloadable": true,
+          "installed": false,
+          "name": "tiny"
+        },
+        {
+          "download_arg": "base.en",
+          "downloadable": true,
+          "installed": true,
+          "name": "base.en"
+        },
+        {
+          "download_arg": "large-v3-turbo",
+          "downloadable": true,
+          "installed": false,
+          "name": "large-v3-turbo"
+        }
+      ]
+    }
+  },
+  "verified": false
+}

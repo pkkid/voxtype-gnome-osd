@@ -12,6 +12,7 @@ rm -rf "${STAGE_DIR}"
 mkdir -p "${STAGE_DIR}" dist
 cp -r build/. "${STAGE_DIR}/"
 cp metadata.json stylesheet.css "${STAGE_DIR}/"
+cp -r icons "${STAGE_DIR}/"
 
 extra_sources=()
 for file in "${STAGE_DIR}"/*; do

@@ -13,7 +13,7 @@ export function buildIndicatorPage(window: Adw.PreferencesWindow, settings: Gio.
     const page = new Adw.PreferencesPage({
         name: 'indicator',
         title: 'Indicator',
-        icon_name: 'preferences-desktop-appearance-symbolic',
+        icon_name: 'voxtype-pill-symbolic',
     });
 
     const showGroup = new Adw.PreferencesGroup();

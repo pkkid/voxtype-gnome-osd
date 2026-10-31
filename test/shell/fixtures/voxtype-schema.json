@@ -3,6 +3,34 @@
   "keys": [
     {
       "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Engine",
+      "engine": null,
+      "key": "engine",
+      "label": "Transcription engine",
+      "description": "Which ASR engine transcribes your audio.",
+      "type": "enum",
+      "choices": [
+        "whisper",
+        "parakeet"
+      ],
+      "value": "whisper"
+    },
+    {
+      "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Engine",
+      "engine": "whisper",
+      "key": "whisper.streaming",
+      "label": "Whisper streaming",
+      "description": "Type text incrementally while you speak.",
+      "type": "bool",
+      "value": false
+    },
+    {
+      "compiled": true,
       "engine": null,
       "file_value": null,
       "restart_required": true,
@@ -222,6 +250,56 @@
       "section": "Advanced",
       "type": "bool",
       "value": true
+    },
+    {
+      "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Models",
+      "description": "",
+      "engine": "whisper",
+      "key": "whisper.model",
+      "label": "Model",
+      "type": "dynamic_enum",
+      "source": "models",
+      "value": "base.en"
+    },
+    {
+      "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Models",
+      "description": "",
+      "engine": "parakeet",
+      "key": "parakeet.model",
+      "label": "Model",
+      "type": "dynamic_enum",
+      "source": "models",
+      "value": "parakeet-tdt-0.6b-v3"
+    },
+    {
+      "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Models",
+      "description": "",
+      "engine": null,
+      "key": "output.post_process.command",
+      "label": "Post-process command",
+      "type": "string",
+      "value": "ollama run 'llama3.2:1b' 'Clean up'"
+    },
+    {
+      "compiled": true,
+      "file_value": null,
+      "restart_required": true,
+      "section": "Models",
+      "engine": "whisper",
+      "key": "whisper.on_demand_loading",
+      "label": "Load on demand",
+      "description": "Load the whisper model when recording starts and unload at idle.",
+      "type": "bool",
+      "value": false
     }
   ]
 }

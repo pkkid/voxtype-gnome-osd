@@ -1,7 +1,7 @@
 // Pure helpers for voxtype's state file. No GI imports so the unit tests can load this.
 
-// 'streaming' is recording with live dictation ([parakeet] streaming = true): text is typed while
-// you speak instead of after you stop.
+// 'streaming' is recording with live dictation (streaming = true under the engine's section): text
+// is typed while you speak instead of after you stop.
 export type DaemonState = 'unavailable' | 'idle' | 'recording' | 'streaming' | 'transcribing';
 
 const KNOWN_STATES: DaemonState[] = ['idle', 'recording', 'streaming', 'transcribing'];

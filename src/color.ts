@@ -1,6 +1,6 @@
 // Pure helpers for the accent color setting. No GI imports so the unit tests can load this.
 
-export const DEFAULT_ACCENT_COLOR = '#f2594d';
+export const DEFAULT_ACCENT_COLOR = '#c0bfbc';
 
 // The dot shown while the microphone is live. Always red, whatever the accent, so it reads as recording.
 export const RECORDING_DOT_COLOR = '#ed333b';

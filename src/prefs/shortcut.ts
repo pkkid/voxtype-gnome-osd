@@ -117,7 +117,7 @@ async function fillShortcutGroup(window: Adw.PreferencesWindow, group: Adw.Prefe
     if (modeModel !== null) {
         const modeRow = new Adw.ComboRow({
             title: 'Activation mode',
-            subtitle: 'Push to talk records while the keys are held. Toggle starts and stops on separate presses.',
+            subtitle: 'Push to talk records while the keys are held. Toggle starts and stops on separate presses. Live transcription always uses Toggle.',
             model: Gtk.StringList.new(modeModel.labels),
             selected: modeModel.selected,
         });

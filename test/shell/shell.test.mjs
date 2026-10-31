@@ -20,7 +20,7 @@ const HELPER_UUID = 'test-helper@voxtype-osd';
 const SCHEMA_ID = 'org.gnome.shell.extensions.voxtype-osd';
 const ACTIVE = 1;
 const INACTIVE = 2;
-const DEFAULT_ACCENT = '#f2594d';
+const DEFAULT_ACCENT = '#c0bfbc';
 const RECORDING_DOT = '#ed333b';
 const MONITOR = [1600, 1000];
 const STYLE_SIZES = { classic: [400, 72], minimal: [96, 30], wave: [400, 72], osd: [250, 62] };
@@ -57,6 +57,7 @@ describe('Voxtype OSD in a headless GNOME Shell', { skip: !hasGnomeShell && 'gno
             cpSync(join(ROOT, file), join(extensionDir(), file));
         }
         cpSync(join(ROOT, 'schemas'), join(extensionDir(), 'schemas'), { recursive: true });
+        cpSync(join(ROOT, 'icons'), join(extensionDir(), 'icons'), { recursive: true });
         execFileSync('glib-compile-schemas', [join(extensionDir(), 'schemas')]);
         cpSync(join(ROOT, 'test', 'shell', 'helper'), path('data', 'gnome-shell', 'extensions', HELPER_UUID), { recursive: true });
 
@@ -416,23 +417,24 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assert.ok(Math.abs(placed.menuCenterX - placed.iconCenterX) <= 1, `menu at ${placed.menuCenterX}, icon at ${placed.iconCenterX}`);
     });
 
-    test('left-clicking the panel icon dictates; other clicks, or with that turned off, open the menu', async () => {
+    test('left-clicking the panel icon opens the menu by default, and dictates when turned on', async () => {
+        assert.equal(pressPanelIcon(1), false, 'a left press goes on to the menu by default');
+
+        setSetting('left-click-toggles', true);
+        await sleep(200);
         clearCalls();
         assert.equal(pressPanelIcon(1), true, 'a left press is handled by the extension');
         await waitUntil(() => calls().includes('voxtype record toggle'), 'the toggle command');
 
         clearCalls();
         assert.equal(pressPanelIcon(3), false, 'a right press goes on to the menu');
-        setSetting('left-click-toggles', false);
-        await sleep(200);
-        assert.equal(pressPanelIcon(1), false, 'a left press goes on to the menu when left-click dictation is off');
-        resetSetting('left-click-toggles');
 
         writeState(null);
         await waitFor(s => s.indicator.status === 'Voxtype is stopped', 'the stopped state');
         assert.equal(pressPanelIcon(1), false, 'a left press opens the menu while voxtype is stopped');
         writeState('idle');
         await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the ready state');
+        resetSetting('left-click-toggles');
 
         assert.deepEqual(calls(), []);
         assertNoErrors();
@@ -584,14 +586,14 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assertNoErrors();
     });
 
-    for (const page of ['general', 'indicator', 'voxtype']) {
+    for (const page of ['general', 'indicator', 'dictation', 'models', 'cleanup', 'notifications', 'system']) {
         test(`the Settings window opens on the ${page} page without errors`, async () => {
             closeSettings();
             clearCalls();
             execFileSync('dbus-update-activation-environment', [`VOXTYPE_OSD_PREFS_PAGE=${page}`], { env });
             execFileSync('gnome-extensions', ['prefs', UUID], { env });
             await waitFor(s => s.windows.includes('Voxtype OSD'), 'the Settings window');
-            // The Voxtype page is filled from voxtype's own schema, asked for when the window opens.
+            // The voxtype pages are filled from voxtype's own schema, asked for when the window opens.
             await waitUntil(() => calls().includes('voxtype config schema --json'), 'the voxtype schema request');
             await sleep(1500);
             if (SCREENSHOTS !== null) {

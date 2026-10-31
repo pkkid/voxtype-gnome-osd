@@ -1,5 +1,4 @@
 import Adw from 'gi://Adw';
-import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
@@ -10,32 +9,52 @@ import { showToast } from './window.js';
 
 const NUMBER_APPLY_DELAY_MS = 600;
 
-// The voxtype settings shown on the Voxtype page. Labels, descriptions, types and ranges come from
+// Pages of voxtype settings. Labels, descriptions, types and ranges come from
 // `voxtype config schema --json`, so only the key names live here. Keys this voxtype build does not
-// know (another engine, an older version) are skipped.
-const VOXTYPE_GROUPS: { title: string; keys: string[] }[] = [
-    {
-        title: 'Dictation',
-        keys: ['parakeet.streaming', 'output.mode', 'output.auto_submit', 'output.fallback_to_clipboard'],
-    },
-    {
-        title: 'Microphone',
-        keys: ['audio.device', 'audio.max_duration_secs', 'audio.pause_media', 'audio.duck_media', 'audio.feedback.enabled'],
-    },
-    {
-        title: 'Notifications',
-        keys: [
-            'output.notification.on_transcription',
-            'output.notification.on_no_speech',
-            'output.notification.on_recording_start',
-            'output.notification.on_recording_stop',
-        ],
-    },
-    {
-        title: 'Memory',
-        keys: ['parakeet.on_demand_loading'],
-    },
-];
+// know (another engine, an older version) and keys for an engine that is not in use are skipped.
+type SchemaGroup = { title: string; keys: string[] };
+
+export type SchemaPageContent = {
+    name: string;
+    title: string;
+    icon: string;
+    groups: SchemaGroup[];
+    // Anything else the page shows, added below the settings once voxtype has answered.
+    fill?: (page: Adw.PreferencesPage, configPath: string) => void;
+};
+
+export const DICTATION_PAGE: SchemaPageContent = {
+    name: 'dictation',
+    title: 'Dictation',
+    icon: 'audio-input-microphone-symbolic',
+    groups: [
+        {
+            title: 'Dictation',
+            keys: ['whisper.streaming', 'parakeet.streaming', 'output.mode', 'output.auto_submit', 'output.fallback_to_clipboard'],
+        },
+        {
+            title: 'Microphone',
+            keys: ['audio.device', 'audio.max_duration_secs', 'audio.pause_media', 'audio.duck_media', 'audio.feedback.enabled'],
+        },
+    ],
+};
+
+export const NOTIFICATIONS_PAGE: SchemaPageContent = {
+    name: 'notifications',
+    title: 'Notifications',
+    icon: 'preferences-system-notifications-symbolic',
+    groups: [
+        {
+            title: 'Notifications',
+            keys: [
+                'output.notification.on_transcription',
+                'output.notification.on_no_speech',
+                'output.notification.on_recording_start',
+                'output.notification.on_recording_stop',
+            ],
+        },
+    ],
+};
 
 type SchemaValue = string | number | boolean | null;
 
@@ -49,6 +68,7 @@ type SchemaKey = {
     min?: number;
     max?: number;
     source?: string;
+    engine?: string | null;
     compiled: boolean;
     restart_required: boolean;
 };
@@ -63,20 +83,20 @@ type AudioDevice = {
     default: boolean;
 };
 
-// The Voxtype page fills in once voxtype has described its settings, so the window opens straight away.
-export function buildVoxtypePage(window: Adw.PreferencesWindow): Adw.PreferencesPage {
+// Fills in once voxtype has described its settings, so the window opens straight away.
+export function buildSchemaPage(window: Adw.PreferencesWindow, content: SchemaPageContent): Adw.PreferencesPage {
     const page = new Adw.PreferencesPage({
-        name: 'voxtype',
-        title: 'Voxtype',
-        icon_name: 'audio-input-microphone-symbolic',
+        name: content.name,
+        title: content.title,
+        icon_name: content.icon,
     });
-    fillVoxtypePage(window, page).catch(error => {
-        logError(error as Error, 'voxtype-osd: could not build the Voxtype page');
+    fillSchemaPage(window, page, content).catch(error => {
+        logError(error as Error, `voxtype-osd: could not build the ${content.title} page`);
     });
     return page;
 }
 
-async function fillVoxtypePage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage): Promise<void> {
+async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage, content: SchemaPageContent): Promise<void> {
     const schemaResult = await run(['voxtype', 'config', 'schema', '--json']);
     if (!schemaResult.ok) {
         const group = new Adw.PreferencesGroup({
@@ -88,7 +108,9 @@ async function fillVoxtypePage(window: Adw.PreferencesWindow, page: Adw.Preferen
     }
 
     const schema = JSON.parse(schemaResult.stdout) as VoxtypeSchema;
-    const keys = new Map(schema.keys.filter(entry => entry.compiled).map(entry => [entry.key, entry]));
+    const activeEngine = schema.keys.find(entry => entry.key === 'engine')?.value ?? null;
+    const applies = (entry: SchemaKey) => entry.compiled && (!entry.engine || activeEngine === null || entry.engine === activeEngine);
+    const keys = new Map(schema.keys.filter(applies).map(entry => [entry.key, entry]));
     const devices = await loadDevices();
 
     const banner = new Adw.Banner({
@@ -124,55 +146,21 @@ async function fillVoxtypePage(window: Adw.PreferencesWindow, page: Adw.Preferen
         }
     };
 
-    for (const { title, keys: names } of VOXTYPE_GROUPS) {
-        const group = new Adw.PreferencesGroup({ title });
-
-        for (const name of names) {
+    for (const { title, keys: names } of content.groups) {
+        const rows = names.flatMap(name => {
             const entry = keys.get(name);
             const row = entry === undefined ? null : buildSchemaRow(entry, devices, apply);
-            if (row !== null) {
-                group.add(row);
-            }
-        }
+            return row === null ? [] : [row];
+        });
 
-        page.add(group);
+        if (rows.length > 0) {
+            const group = new Adw.PreferencesGroup({ title });
+            rows.forEach(row => group.add(row));
+            page.add(group);
+        }
     }
 
-    page.add(buildMoreGroup(window, schema.config_path));
-}
-
-function buildMoreGroup(window: Adw.PreferencesWindow, configPath: string): Adw.PreferencesGroup {
-    const group = new Adw.PreferencesGroup({
-        title: 'More',
-        description: 'Voxtype has many more options than fit here. Edit the config file, then restart Voxtype.',
-    });
-
-    const fileRow = new Adw.ActionRow({
-        title: 'Open config file',
-        subtitle: configPath,
-        activatable: true,
-    });
-    fileRow.add_suffix(new Gtk.Image({ icon_name: 'document-edit-symbolic' }));
-    fileRow.connect('activated', () => {
-        try {
-            Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(configPath, null), null);
-        } catch (error) {
-            showToast(window, `Could not open ${configPath}`);
-        }
-    });
-    group.add(fileRow);
-
-    const restartRow = new Adw.ActionRow({
-        title: 'Restart Voxtype',
-        activatable: true,
-    });
-    restartRow.add_suffix(new Gtk.Image({ icon_name: 'view-refresh-symbolic' }));
-    restartRow.connect('activated', () => {
-        restartService().then(result => showToast(window, result.ok ? 'Voxtype restarted' : `Could not restart Voxtype: ${firstLine(result.stderr)}`));
-    });
-    group.add(restartRow);
-
-    return group;
+    content.fill?.(page, schema.config_path);
 }
 
 type Apply = (entry: SchemaKey, value: string | null) => Promise<void>;

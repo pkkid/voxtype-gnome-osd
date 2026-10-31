@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stand-in for ollama in the shell tests.
+echo "ollama $*" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
+if [ "$1" = list ]; then
+    printf 'NAME               ID              SIZE      MODIFIED\n'
+    printf 'llama3.2:1b        baf6a787fdff    1.3 GB    3 days ago\n'
+    printf 'tinyllama:latest   2644915ede35    45 MB     2 weeks ago\n'
+fi
