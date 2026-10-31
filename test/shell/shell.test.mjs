@@ -406,6 +406,16 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assertNoErrors();
     });
 
+    test('the panel menu opens centered on its icon', async () => {
+        helper('OpenMenuMidPanel');
+        await waitFor(s => s.indicator.menuOpen && s.indicator.menuWidth > 0, 'the menu to open');
+        await sleep(100);
+        const { indicator: placed } = inspect();
+        helper('CloseMenu');
+
+        assert.ok(Math.abs(placed.menuCenterX - placed.iconCenterX) <= 1, `menu at ${placed.menuCenterX}, icon at ${placed.iconCenterX}`);
+    });
+
     test('left-clicking the panel icon dictates; other clicks, or with that turned off, open the menu', async () => {
         clearCalls();
         assert.equal(pressPanelIcon(1), true, 'a left press is handled by the extension');

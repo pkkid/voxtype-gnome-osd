@@ -39,7 +39,7 @@ export const PanelIndicator = GObject.registerClass(
         declare leftClickToggles: boolean;
 
         _init() {
-            super._init(0, 'Voxtype', false);
+            super._init(0.5, 'Voxtype', false);
             this.handlers = null;
             this.state = 'unavailable';
             this.pendingServiceState = null;

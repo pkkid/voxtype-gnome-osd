@@ -21,6 +21,7 @@ const INTERFACE = `
     </method>
     <method name="ToggleServiceSwitch"/>
     <method name="ActivateMenuItem"><arg type="s" direction="in" name="label"/></method>
+    <method name="OpenMenuMidPanel"/>
     <method name="CloseMenu"/>
     <method name="StartDrag"/>
     <method name="EmitMonitorsChanged"/>
@@ -186,12 +187,20 @@ function describePill(pill) {
     };
 }
 
+function centerX(actor) {
+    const [x] = actor.get_transformed_position();
+    return x + actor.get_transformed_size()[0] / 2;
+}
+
 function describeIndicator(button) {
     return {
         visible: button.container.visible,
         iconName: button.icon.icon_name,
         iconStyle: button.icon.get_style(),
         menuOpen: button.menu.isOpen,
+        iconCenterX: centerX(button.icon),
+        menuCenterX: centerX(button.menu.actor),
+        menuWidth: button.menu.actor.get_transformed_size()[0],
         status: button.statusItem.label.text,
         dictation: button.dictationItem.visible ? button.dictationItem.label.text : null,
         serviceSwitch: button.serviceItem.state,
@@ -292,8 +301,23 @@ export default class TestHelper extends Extension {
         item.emit('activate', Clutter.get_current_event());
     }
 
+    // Opens the menu with the icon mid-panel. At its real spot the icon sits so close to the screen
+    // edge that GNOME Shell pushes the menu back on screen, whatever its alignment is.
+    OpenMenuMidPanel() {
+        const { container, menu } = indicator();
+        container.get_parent().remove_child(container);
+        Main.panel._centerBox.add_child(container);
+        menu.open(0);
+    }
+
     CloseMenu() {
-        indicator()?.menu.close(false);
+        const button = indicator();
+        button?.menu.close(false);
+
+        if (button?.container.get_parent() === Main.panel._centerBox) {
+            Main.panel._centerBox.remove_child(button.container);
+            Main.panel._rightBox.insert_child_at_index(button.container, 0);
+        }
     }
 
     // Puts the pill into the middle of a drag, holding the same stage grab a real press takes.
