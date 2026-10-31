@@ -95,7 +95,7 @@ function buildPanelIconGroup(settings: Gio.Settings): Adw.PreferencesGroup {
 
     const stoppedRow = new Adw.SwitchRow({
         title: 'Keep panel icon while Voxtype is stopped',
-        subtitle: 'Shows a crossed-out microphone so you can start Voxtype from the menu.',
+        subtitle: 'Shows a dimmed icon so you can start Voxtype from the menu.',
     });
     settings.bind('show-when-stopped', stoppedRow, 'active', Gio.SettingsBindFlags.DEFAULT);
     group.add(stoppedRow);

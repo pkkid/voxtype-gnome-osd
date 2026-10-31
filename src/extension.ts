@@ -30,6 +30,7 @@ export default class VoxtypeOsdExtension extends Extension {
         this.pill = new OsdPill(this.settings);
 
         this.indicator = new PanelIndicator();
+        this.indicator.setIconFile(`${this.path}/icons/hicolor/scalable/actions/voxtype-panel-symbolic.svg`);
         this.indicator.setHandlers({
             toggleRecording: () => this.report(toggleRecording(), 'could not toggle recording'),
             setServiceRunning: running => this.changeService(running),

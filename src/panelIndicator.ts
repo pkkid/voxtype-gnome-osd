@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
@@ -48,10 +49,7 @@ export const PanelIndicator = GObject.registerClass(
             this.leftClickToggles = false;
             this.accentColor = null;
 
-            this.icon = new St.Icon({
-                style_class: 'system-status-icon voxtype-indicator',
-                icon_name: 'audio-input-microphone-symbolic',
-            });
+            this.icon = new St.Icon({ style_class: 'system-status-icon voxtype-indicator' });
             this.add_child(this.icon);
 
             this.buildMenu();
@@ -60,6 +58,11 @@ export const PanelIndicator = GObject.registerClass(
 
         setHandlers(handlers: IndicatorHandlers) {
             this.handlers = handlers;
+        }
+
+        // Shipped with the extension rather than taken from the icon theme.
+        setIconFile(path: string) {
+            this.icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path));
         }
 
         vfunc_event(event: Clutter.Event): boolean {
@@ -82,7 +85,6 @@ export const PanelIndicator = GObject.registerClass(
             }
 
             const running = state !== 'unavailable';
-            this.icon.icon_name = running ? 'audio-input-microphone-symbolic' : 'microphone-disabled-symbolic';
             this.icon.opacity = running ? 255 : STOPPED_ICON_OPACITY;
             if (isRecording(state)) {
                 this.icon.add_style_class_name('voxtype-indicator-recording');

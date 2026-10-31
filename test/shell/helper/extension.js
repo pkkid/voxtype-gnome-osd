@@ -195,7 +195,8 @@ function centerX(actor) {
 function describeIndicator(button) {
     return {
         visible: button.container.visible,
-        iconName: button.icon.icon_name,
+        iconFile: button.icon.gicon?.get_file().get_basename() ?? null,
+        iconOpacity: button.icon.opacity,
         iconStyle: button.icon.get_style(),
         menuOpen: button.menu.isOpen,
         iconCenterX: centerX(button.icon),

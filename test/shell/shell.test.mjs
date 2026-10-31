@@ -267,7 +267,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
         assert.equal(state.extensionState, ACTIVE);
         assert.equal(state.indicator.visible, true);
-        assert.equal(state.indicator.iconName, 'audio-input-microphone-symbolic');
+        assert.equal(state.indicator.iconFile, 'voxtype-panel-symbolic.svg');
         assert.equal(state.indicator.status, 'Voxtype is ready');
         assert.ok(hidden(state), 'no indicator while idle');
         assertNoErrors();

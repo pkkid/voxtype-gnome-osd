@@ -19,7 +19,7 @@ section) is already the case while you speak. Drag it to move it; the position i
 
 <img src="docs/images/panel-menu.png" align="right" width="250" alt="Panel menu">
 
-**Panel icon:** the accent color while dictating or transcribing, and a dimmed crossed-out microphone
+**Panel icon:** the accent color while dictating or transcribing, and dimmed
 while the voxtype service is stopped. Left click can start and stop dictation (off by default). Right
 click opens a menu with the current status, start/stop dictation, a switch for the voxtype service,
 "Move recording indicator" (shows the indicator for 20 seconds so it can be dragged) and Settings.
