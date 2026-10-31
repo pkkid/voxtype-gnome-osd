@@ -62,6 +62,9 @@ are written with `voxtype config set`, and a banner offers to restart voxtype wh
 - **GPU:** the `voxtype` launcher starts the Vulkan build when `VOXTYPE_GPU=1` is set, which needs no
   root. The switch adds that to the service in a systemd drop-in, `voxtype-osd-gpu.conf`, and deletes the
   file to turn it off. `voxtype info accel` reports where the daemon really ended up.
+- **Config file:** the settings window reads voxtype's config each time it opens, so hand edits show up
+  then. Without a user config voxtype falls back to `/etc/voxtype/config.toml`, which it cannot save to,
+  so the window starts by copying that to `~/.config/voxtype/config.toml`.
 - **Live transcription:** voxtype runs it in toggle mode even when `hotkey.mode` is `push_to_talk`, so
   the General page shows Toggle while it is on, without changing the saved setting.
 - **Text cleanup:** voxtype has no cleanup model of its own, only `output.post_process.command`, a shell

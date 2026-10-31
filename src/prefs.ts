@@ -9,12 +9,14 @@ import { buildIndicatorPage } from './prefs/indicatorPage.js';
 import { buildModelsPage } from './prefs/modelsPage.js';
 import { buildSchemaPage, DICTATION_PAGE, NOTIFICATIONS_PAGE } from './prefs/schemaPage.js';
 import { buildSystemPage } from './prefs/systemPage.js';
+import { ensureUserConfig } from './prefs/voxtypeConfig.js';
 import { setSidebarContent } from './prefs/window.js';
 
 export default class VoxtypeOsdPreferences extends ExtensionPreferences {
     async fillPreferencesWindow(window: Adw.PreferencesWindow): Promise<void> {
         const settings = this.getSettings();
         window.set_default_size(880, 800);
+        ensureUserConfig();
         Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!).add_search_path(`${this.path}/icons`);
 
         setSidebarContent(window, {
