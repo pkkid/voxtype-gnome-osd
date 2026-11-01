@@ -31,6 +31,8 @@ const STATE_LABELS: Partial<Record<DaemonState, string>> = {
     transcribing: 'Transcribing…',
 };
 
+const CLEANING_UP_LABEL = 'Cleaning up…';
+
 type Drag = {
     grab: Clutter.Grab;
     offsetX: number;
@@ -47,6 +49,7 @@ export class OsdPill {
     private readonly signalIds: number[] = [];
     private monitorsChangedId = 0;
     private state: DaemonState = 'unavailable';
+    private cleaningUp = false;
     private positioning = false;
     private positioningTimeoutId = 0;
     private drag: Drag | null = null;
@@ -80,6 +83,12 @@ export class OsdPill {
         }));
 
         this.reposition();
+    }
+
+    // Cleanup Anything has no state of voxtype's to show, and dictation takes priority over it.
+    setCleaningUp(cleaning: boolean): void {
+        this.cleaningUp = cleaning;
+        this.render();
     }
 
     get showsWaveform(): boolean {
@@ -188,7 +197,8 @@ export class OsdPill {
 
     private render(): void {
         const accent = accentColor(this.settings.get_string('accent-color'));
-        const label = this.settings.get_boolean('show-pill') ? STATE_LABELS[this.state] : undefined;
+        const stateLabel = STATE_LABELS[this.state] ?? (this.cleaningUp ? CLEANING_UP_LABEL : undefined);
+        const label = this.settings.get_boolean('show-pill') ? stateLabel : undefined;
 
         if (label === undefined && !this.positioning) {
             this.waveform.stop();

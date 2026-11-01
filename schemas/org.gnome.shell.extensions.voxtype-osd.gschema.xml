@@ -38,6 +38,28 @@
       <summary>Last text cleanup command</summary>
       <description>Kept here so that turning text cleanup off, which removes it from the voxtype config, does not lose it.</description>
     </key>
+    <key name="cleanup-anything-enabled" type="b">
+      <default>false</default>
+      <summary>Clean up the focused text field on a trigger</summary>
+    </key>
+    <key name="cleanup-anything-trigger" type="s">
+      <choices>
+        <choice value="double-ctrl"/>
+        <choice value="shortcut"/>
+      </choices>
+      <default>'double-ctrl'</default>
+      <summary>What starts Cleanup Anything</summary>
+    </key>
+    <key name="cleanup-anything-shortcut" type="as">
+      <default><![CDATA[['<Super><Alt>c']]]></default>
+      <summary>Shortcut for Cleanup Anything</summary>
+    </key>
+    <key name="cleanup-anything-max-chars" type="i">
+      <range min="500" max="50000"/>
+      <default>8000</default>
+      <summary>Longest text Cleanup Anything will send</summary>
+      <description>Also guards against Ctrl+A selecting a whole page or document.</description>
+    </key>
     <key name="pill-x" type="d">
       <range min="0" max="1"/>
       <default>0.5</default>

@@ -4,6 +4,7 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { AudioBridge } from './audioBridge.js';
+import { CleanupAnything } from './cleanupAnything.js';
 import { accentColor } from './color.js';
 import { DaemonState, DaemonStateWatcher, isRecording } from './daemonState.js';
 import { OsdPill } from './osdPill.js';
@@ -22,6 +23,7 @@ export default class VoxtypeOsdExtension extends Extension {
     private indicator: InstanceType<typeof PanelIndicator> | null = null;
     private pill: OsdPill | null = null;
     private bridge: AudioBridge | null = null;
+    private cleanup: CleanupAnything | null = null;
     private state: DaemonState = 'unavailable';
     private serviceTimeoutId = 0;
 
@@ -52,10 +54,15 @@ export default class VoxtypeOsdExtension extends Extension {
 
         this.watcher = new DaemonStateWatcher(state => this.applyState(state));
         this.watcher.start();
+
+        this.cleanup = new CleanupAnything(this.settings, busy => this.pill?.setCleaningUp(busy));
     }
 
     disable() {
         this.clearServiceTimeout();
+
+        this.cleanup?.destroy();
+        this.cleanup = null;
 
         for (const id of this.settingsIds) {
             this.settings?.disconnect(id);

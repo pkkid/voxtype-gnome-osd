@@ -28,7 +28,7 @@ export default class VoxtypeOsdPreferences extends ExtensionPreferences {
             buildIndicatorPage(window, settings),
             buildSchemaPage(window, DICTATION_PAGE),
             buildModelsPage(window),
-            buildCleanupPage(window, settings),
+            buildCleanupPage(window, settings, this.path),
             buildSchemaPage(window, NOTIFICATIONS_PAGE),
             buildSystemPage(window),
         ]);

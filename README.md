@@ -37,7 +37,8 @@ click opens a menu with the current status, start/stop dictation, a switch for t
 - **Dictation:** live transcription, delivery mode, and microphone options from voxtype's own config.
 - **Models:** dictation models with what each is best for, downloading and switching between them,
   running them on the GPU, the memory in use, and on-demand model loading.
-- **Cleanup:** optional text cleanup through a command of your choice.
+- **Cleanup:** optional text cleanup through a command of your choice, for dictation and for Cleanup
+  Anything. One click sets it to the bundled wrapper for Claude Code.
 - **Notifications:** which of voxtype's notifications to show.
 - **System:** the models folder, the total space used and the config file.
 
@@ -48,6 +49,16 @@ are written with `voxtype config set`, and a banner offers to restart voxtype wh
   <img src="docs/images/settings-indicator.png" width="620" alt="Indicator settings">
 </p>
 
+**Cleanup Anything:** not a voxtype feature, but it shares its cleanup command. Off by default. Double
+tap Left Ctrl, or press a shortcut of your choice, to clean up the text field you are in: it selects and
+copies the whole field, runs the command, pastes the result over it and puts your clipboard back. The
+whole field goes to whatever service the command uses. Press the trigger again to cancel. Your text is
+left alone if the command fails, if the field changed or you moved to another window in the meantime, or
+if it is over the length limit. Terminals are skipped, because Ctrl+C would interrupt what is running in
+them, but a terminal inside another app, like VS Code's, cannot be told apart from the app. Only one
+clipboard format can be put back, so rich text comes back as plain text. Ctrl+Z undoes the change in most
+apps.
+
 ## How it works
 
 - **State:** watches `$XDG_RUNTIME_DIR/voxtype/state` with a `Gio.FileMonitor` and maps it to
@@ -56,6 +67,20 @@ are written with `voxtype config set`, and a banner offers to restart voxtype wh
 - **Waveform:** while recording, launches `voxtype-audio-bridge` as a subprocess and reads one JSON line
   per sample (`{"peak": 0.42}`) from its stdout. Classic keeps the loudest peak of each 100 ms as one
   bar; the other styles follow the latest peaks and a smoothed level. Malformed lines are dropped.
+- **Cleanup Anything:** the double tap is the signal behind GNOME's Locate Pointer, which fires for each
+  lone tap of `locate-pointer-key` (Left Ctrl unless changed) whether that feature is on or not, and
+  never for a shortcut like Ctrl+C, so the extension never sees your keystrokes. Keys are sent through a
+  GNOME virtual keyboard, so it needs neither ydotool nor the input group.
+- **Claude Code wrapper:** `bin/voxtype-cleanup.py` runs your installed, signed in `claude --print` with
+  every tool off, using your own login, and needs only Python 3. It takes `--model` (a name or alias like
+  `sonnet`), `--effort` (`low` to `max`) and `--prompt`, where `$text` marks where your text goes. They
+  all live in the cleanup command, so Settings and voxtype's config always agree. A custom prompt changes
+  the edit, not the checks, so a prompt asking for more than a light edit gets its replies rejected.
+  Copied text can hold instructions aimed
+  at the model, so the design assumes the model can be fooled: it has no tools, MCP servers, hooks or
+  project files, the wrapper stops if a tool appears, and a reply is thrown out unless it is a light edit
+  of the input. Those checks cannot judge meaning, so a small hostile edit like changing one number would
+  pass. Read the result before sending it.
 - **Models:** the list comes from `voxtype info models`, the "best for" notes from voxtype.io, and sizes
   are measured from the models folder. Downloads run `voxtype setup --download --progress-format json`,
   and switching runs `voxtype setup model --set`, which refuses a model that is not downloaded.

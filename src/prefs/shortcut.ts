@@ -263,7 +263,7 @@ function removeToggleBindings(): void {
     }
 }
 
-function isUsableShortcut(keyval: number, mask: Gdk.ModifierType): boolean {
+export function isUsableShortcut(keyval: number, mask: Gdk.ModifierType): boolean {
     if (!Gtk.accelerator_valid(keyval, mask)) {
         return false;
     }

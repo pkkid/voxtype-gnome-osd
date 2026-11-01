@@ -19,6 +19,7 @@ const UUID = 'voxtype-osd@theoodawara';
 const HELPER_UUID = 'test-helper@voxtype-osd';
 const SCHEMA_ID = 'org.gnome.shell.extensions.voxtype-osd';
 const ACTIVE = 1;
+const ACTION_MODE_NORMAL = 1;
 const INACTIVE = 2;
 const DEFAULT_ACCENT = '#c0bfbc';
 const RECORDING_DOT = '#ed333b';
@@ -58,6 +59,7 @@ describe('Voxtype OSD in a headless GNOME Shell', { skip: !hasGnomeShell && 'gno
         }
         cpSync(join(ROOT, 'schemas'), join(extensionDir(), 'schemas'), { recursive: true });
         cpSync(join(ROOT, 'icons'), join(extensionDir(), 'icons'), { recursive: true });
+        cpSync(join(ROOT, 'bin'), join(extensionDir(), 'bin'), { recursive: true });
         execFileSync('glib-compile-schemas', [join(extensionDir(), 'schemas')]);
         cpSync(join(ROOT, 'test', 'shell', 'helper'), path('data', 'gnome-shell', 'extensions', HELPER_UUID), { recursive: true });
 
@@ -584,6 +586,198 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         writeState('idle');
         await waitFor(hidden, 'the indicator to hide');
         assertNoErrors();
+    });
+
+    describe('Cleanup Anything', () => {
+        const editors = [];
+        const FIELD = 'hello world';
+        const CLIPBOARD = 'what was on the clipboard';
+
+        function openEditor(appId, text, file) {
+            rmSync(path(file), { force: true });
+            const app = spawn('gjs', ['-m', join(ROOT, 'test', 'shell', 'helper', 'editor.js'), appId, path(file), text], {
+                env: { ...env, WAYLAND_DISPLAY: 'wayland-0', GDK_BACKEND: 'wayland', GSK_RENDERER: 'cairo' },
+                stdio: 'ignore',
+            });
+            editors.push(app);
+            return app;
+        }
+
+        const field = (file = 'field.txt') => readFileSync(path(file), 'utf8');
+
+        function clipboard() {
+            rmSync(path('clipboard.txt'), { force: true });
+            helper('SaveClipboard', path('clipboard.txt'));
+            return readFileSync(path('clipboard.txt'), 'utf8');
+        }
+
+        async function prepare(command, appId = 'org.voxtypeosd.Editor') {
+            editors.splice(0).forEach(app => app.kill());
+            openEditor(appId, FIELD, 'field.txt');
+            await waitFor(s => s.windows.includes(appId), 'the text app');
+            await waitUntil(() => field() === FIELD, 'the text app to fill in');
+            await waitFor(s => s.actionMode === ACTION_MODE_NORMAL, 'the shell to finish starting');
+            await sleep(400);
+            helper('SetClipboard', CLIPBOARD);
+            await waitUntil(() => clipboard() === CLIPBOARD, 'the clipboard to be set');
+            setSetting('cleanup-command', command);
+            setSetting('cleanup-anything-enabled', true);
+            await sleep(100);
+            clearCalls();
+        }
+
+        const finished = async () => {
+            await waitFor(hidden, 'the cleanup to finish', 8000);
+            await waitUntil(() => clipboard() === CLIPBOARD, 'the clipboard to be put back');
+        };
+
+        const doubleTap = () => helper('TapControl', 2, 120);
+        const started = () => waitUntil(() => calls().includes('voxtype config get output.post_process.command'), 'the cleanup to start');
+
+        after(() => {
+            editors.forEach(app => app.kill());
+            resetSetting('cleanup-anything-enabled');
+            resetSetting('cleanup-anything-trigger');
+            resetSetting('cleanup-command');
+        });
+
+        test('a double tap of Left Ctrl replaces the field and puts the clipboard back', async () => {
+            await prepare('tr a-z A-Z');
+            doubleTap();
+            await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced');
+            await finished();
+            assertNoErrors();
+        });
+
+        test('says it is cleaning up while the command runs', async () => {
+            await prepare('sleep 1; tr a-z A-Z');
+            doubleTap();
+            await waitFor(s => shown(s) && s.pill.label === 'Cleaning up…', 'the indicator');
+            await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced');
+            await finished();
+            assertNoErrors();
+        });
+
+        test('runs the bundled wrapper through to Claude Code', async () => {
+            await prepare(`python3 '${join(extensionDir(), 'bin', 'voxtype-cleanup.py')}' --model sonnet --effort high --prompt 'Don'\\''t shout: $text'`);
+            doubleTap();
+            await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced', 10000);
+            await finished();
+            assertNoErrors();
+        });
+
+        test('ignores a single tap, and taps too far apart', async () => {
+            await prepare('tr a-z A-Z');
+            helper('TapControl', 1, 0);
+            await sleep(700);
+            helper('TapControl', 2, 600);
+            await sleep(1200);
+            assert.equal(calls().length, 0);
+            assert.equal(field(), FIELD);
+            assert.equal(clipboard(), CLIPBOARD);
+        });
+
+        test('ignores Ctrl+C and Ctrl+V pressed quickly together', async () => {
+            await prepare('tr a-z A-Z');
+            helper('PressKeys', 'Control_L+c');
+            await sleep(120);
+            helper('PressKeys', 'Control_L+Home');
+            await sleep(900);
+            assert.equal(calls().length, 0);
+            assert.equal(field(), FIELD);
+        });
+
+        test('a custom shortcut works, while the double tap does nothing, and waits for the keys to lift', async () => {
+            setSetting('cleanup-anything-trigger', 'shortcut');
+            await prepare('tr a-z A-Z');
+            doubleTap();
+            await sleep(700);
+            assert.equal(calls().length, 0);
+
+            helper('PressKeys', 'Super_L+Alt_L+c');
+            await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced');
+            await finished();
+            setSetting('cleanup-anything-trigger', 'double-ctrl');
+            assertNoErrors();
+        });
+
+        test('skips terminals, where Ctrl+C would interrupt what is running', async () => {
+            await prepare('tr a-z A-Z', 'org.gnome.Console');
+            doubleTap();
+            await sleep(900);
+            assert.equal(calls().length, 0);
+            assert.equal(field(), FIELD);
+            assert.equal(clipboard(), CLIPBOARD);
+        });
+
+        test('leaves the field alone when the command fails', async () => {
+            await prepare('echo no thanks >&2; exit 1');
+            doubleTap();
+            await started();
+            await sleep(600);
+            await finished();
+            assert.equal(field(), FIELD);
+            assertNoErrors();
+        });
+
+        test('leaves the field alone when it changes during the cleanup', async () => {
+            await prepare('sleep 1; tr a-z A-Z');
+            doubleTap();
+            await started();
+            await sleep(300);
+            helper('PressKeys', 'x');
+            await waitUntil(() => field() === 'x', 'the keypress to arrive');
+            await sleep(1500);
+            await finished();
+            assert.equal(field(), 'x');
+        });
+
+        test('leaves the field alone when focus moves to another window', async () => {
+            await prepare('sleep 1.5; tr a-z A-Z');
+            doubleTap();
+            await started();
+            openEditor('org.voxtypeosd.Other', 'other text', 'other.txt');
+            await waitFor(s => s.windows.includes('org.voxtypeosd.Other'), 'the other app');
+            await sleep(2000);
+            await finished();
+            assert.equal(field(), FIELD);
+            assert.equal(field('other.txt'), 'other text');
+        });
+
+        test('the trigger cancels a running cleanup and stops its whole command', async () => {
+            await prepare(`sleep 30 & echo $! > '${path('cleanup.pid')}'; wait; tr a-z A-Z`);
+            doubleTap();
+            await waitUntil(() => existsSync(path('cleanup.pid')), 'the command to start');
+            const pid = Number(readFileSync(path('cleanup.pid'), 'utf8'));
+            doubleTap();
+            await waitUntil(() => !existsSync(`/proc/${pid}`), 'the command to stop');
+            await finished();
+            assert.equal(field(), FIELD);
+            rmSync(path('cleanup.pid'));
+            assertNoErrors();
+        });
+
+        test('does nothing while turned off', async () => {
+            await prepare('tr a-z A-Z');
+            setSetting('cleanup-anything-enabled', false);
+            await sleep(100);
+            doubleTap();
+            await sleep(800);
+            assert.equal(calls().length, 0);
+            assert.equal(field(), FIELD);
+        });
+
+        test('stops cleanly when the extension is disabled partway through', async () => {
+            await prepare('sleep 2; tr a-z A-Z');
+            doubleTap();
+            await started();
+            await setEnabled(false);
+            await setEnabled(true);
+            await sleep(600);
+            assert.equal(field(), FIELD);
+            assert.equal(clipboard(), CLIPBOARD);
+            assertNoErrors();
+        });
     });
 
     for (const page of ['general', 'indicator', 'dictation', 'models', 'cleanup', 'notifications', 'system']) {

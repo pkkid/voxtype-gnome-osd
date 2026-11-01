@@ -45,6 +45,12 @@ const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 // No emojis because ydotool cannot type them, and "only" because these models like to add a preamble.
 const CLEANUP_PROMPT = 'Clean up this dictated text. Remove filler words, fix grammar and punctuation. Output ONLY the cleaned text, with no quotes, notes or emojis:';
 
+// Must match DEFAULT_PROMPT in the wrapper, which a test checks.
+export const DEFAULT_CLEANUP_PROMPT = 'Clean up this text. Fix spelling, grammar and punctuation, and remove filler words like um and uh. Output only the cleaned text: $text';
+
+const CLEANUP_WRAPPER = 'bin/voxtype-cleanup.py';
+const PROMPT_FLAG = '--prompt';
+
 // From the model tables on voxtype.io, in the same order, keyed by the name `voxtype setup` takes.
 // tiny.en is listed there as 39 MB, but the file is 75 MB. omnilingual-300m is listed as
 // omnilingual-large, but voxtype's catalog does not know that name.
@@ -230,6 +236,70 @@ export function formatBytes(bytes: number): string {
 
 export function cleanupCommand(model: string): string {
     return `ollama run ${shellQuote(model)} ${shellQuote(CLEANUP_PROMPT)}`;
+}
+
+// Runs the wrapper that ships with the extension, which uses the installed Claude Code with no tools.
+export function claudeCleanupCommand(extensionPath: string): string {
+    return `python3 ${shellQuote(`${extensionPath}/${CLEANUP_WRAPPER}`)} --model haiku --effort low --prompt ${shellQuote(DEFAULT_CLEANUP_PROMPT)}`;
+}
+
+// The prompt the wrapper in a cleanup command uses, or null for a command that takes no prompt, or
+// one this cannot safely rewrite, like a pipeline.
+export function cleanupPrompt(command: string): string | null {
+    const words = shellWords(command);
+    if (words === null || !words.some(word => word.endsWith(CLEANUP_WRAPPER))) {
+        return null;
+    }
+
+    const index = words.indexOf(PROMPT_FLAG);
+    const inline = words.find(word => word.startsWith(`${PROMPT_FLAG}=`));
+    return (index === -1 ? inline?.slice(PROMPT_FLAG.length + 1) : words[index + 1]) || DEFAULT_CLEANUP_PROMPT;
+}
+
+// The same command with its prompt replaced. A blank prompt goes back to the wrapper's own default.
+export function withCleanupPrompt(command: string, prompt: string): string {
+    const words = (shellWords(command) ?? []).filter((word, index, all) => word !== PROMPT_FLAG && all[index - 1] !== PROMPT_FLAG && !word.startsWith(`${PROMPT_FLAG}=`));
+    return [...words, ...(prompt.trim() === '' ? [] : [PROMPT_FLAG, prompt])].map(word => /^[\w@%+=:,./-]+$/.test(word) ? word : shellQuote(word)).join(' ');
+}
+
+// Splits a simple command into words, or gives null if it uses anything more than quotes and spaces.
+function shellWords(command: string): string[] | null {
+    const words: string[] = [];
+    let word: string | null = null;
+    let quote = '';
+
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command[index];
+
+        if (quote === "'") {
+            quote = char === "'" ? '' : quote;
+            word += char === "'" ? '' : char;
+        } else if (quote === '"') {
+            if (char === '$' || char === '`') {
+                return null;
+            }
+            quote = char === '"' ? '' : quote;
+            const escaped = char === '\\' && /["\\]/.test(command[index + 1] ?? '');
+            word += escaped ? command[++index] : char === '"' ? '' : char;
+        } else if (/\s/.test(char)) {
+            if (word !== null) {
+                words.push(word);
+                word = null;
+            }
+        } else if (/[|&;<>()$`*?#~]/.test(char)) {
+            return null;
+        } else if (char === '\\') {
+            word = (word ?? '') + (command[++index] ?? '');
+        } else {
+            quote = char === "'" || char === '"' ? char : '';
+            word = (word ?? '') + (quote === '' ? char : '');
+        }
+    }
+
+    if (quote !== '') {
+        return null;
+    }
+    return word === null ? words : [...words, word];
 }
 
 // The Ollama model a cleanup command runs, or null for any other command.

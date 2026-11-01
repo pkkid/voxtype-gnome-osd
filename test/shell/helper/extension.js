@@ -4,6 +4,7 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import St from 'gi://St';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -29,6 +30,10 @@ const INTERFACE = `
       <arg type="u" direction="in" name="id"/>
       <arg type="b" direction="out" name="alive"/>
     </method>
+    <method name="TapControl"><arg type="u" direction="in" name="taps"/><arg type="u" direction="in" name="gap"/></method>
+    <method name="PressKeys"><arg type="s" direction="in" name="keys"/></method>
+    <method name="SetClipboard"><arg type="s" direction="in" name="text"/></method>
+    <method name="SaveClipboard"><arg type="s" direction="in" name="path"/></method>
     <method name="SetExtensionEnabled"><arg type="b" direction="in" name="enabled"/></method>
     <method name="Screenshot">
       <arg type="s" direction="in" name="path"/>
@@ -243,6 +248,8 @@ function writeScreenshot(path, take) {
 
 export default class TestHelper extends Extension {
     enable() {
+        this._taps = 0;
+        this._tapId = global.connect('locate-pointer', () => { this._taps += 1; });
         this._dbus = Gio.DBusExportedObject.wrapJSObject(INTERFACE, this);
         this._dbus.export(Gio.DBus.session, OBJECT_PATH);
         this._nameId = Gio.bus_own_name_on_connection(Gio.DBus.session, BUS_NAME, Gio.BusNameOwnerFlags.NONE, null, null);
@@ -263,6 +270,7 @@ export default class TestHelper extends Extension {
     }
 
     disable() {
+        global.disconnect(this._tapId);
         if (this._startupId) {
             Main.layoutManager.disconnect(this._startupId);
         }
@@ -273,9 +281,56 @@ export default class TestHelper extends Extension {
         this._systemdUnit.unexport();
     }
 
+    // Lone taps of Left Ctrl, through the same input path as a real keyboard.
+    TapControl(taps, gap) {
+        for (let tap = 0; tap < taps; tap += 1) {
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, tap * gap + 1, () => {
+                this._press(Clutter.KEY_Control_L);
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
+                    this._release(Clutter.KEY_Control_L);
+                    return GLib.SOURCE_REMOVE;
+                });
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    // Keys separated by + are held together, like Super_L+Alt_L+c. The first is held 200ms longer,
+    // as a person's fingers would be.
+    PressKeys(keys) {
+        const keyvals = keys.split('+').map(name => Clutter[`KEY_${name}`]);
+        keyvals.forEach(keyval => this._press(keyval));
+        [...keyvals].reverse().slice(0, -1).forEach(keyval => this._release(keyval));
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+            this._release(keyvals[0]);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    SetClipboard(text) {
+        St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+    }
+
+    SaveClipboard(path) {
+        St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (_clipboard, text) => GLib.file_set_contents(path, text ?? ''));
+    }
+
+    _keyboard() {
+        this._virtualKeyboard ??= global.stage.get_context().get_backend().get_default_seat().create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+        return this._virtualKeyboard;
+    }
+
+    _press(keyval) {
+        this._keyboard().notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.PRESSED);
+    }
+
+    _release(keyval) {
+        this._keyboard().notify_keyval(GLib.get_monotonic_time(), keyval, Clutter.KeyState.RELEASED);
+    }
+
     Inspect(path) {
         // A file sidesteps GVariant's string escaping for the JSON.
-        GLib.file_set_contents(path, JSON.stringify(inspect()));
+        GLib.file_set_contents(path, JSON.stringify({ ...inspect(), taps: this._taps, focused: global.display.focus_window?.get_wm_class() ?? null, actionMode: Main.actionMode, pointerMask: global.get_pointer()[2] }));
     }
 
     // Hands the panel button a button press, as Clutter would. The headless backend drops virtual

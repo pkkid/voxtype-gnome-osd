@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
+    claudeCleanupCommand,
     cleanupCommand,
     cleanupModel,
+    cleanupPrompt,
+    DEFAULT_CLEANUP_PROMPT,
     dictationModels,
     formatBytes,
     gpuAvailable,
@@ -16,6 +22,7 @@ import {
     parseDownloadEvent,
     parseModelsDir,
     parseOllamaList,
+    withCleanupPrompt,
 } from '../src/prefs/models.js';
 
 const CATALOG = {
@@ -82,6 +89,59 @@ test('cleanupCommand quotes for the shell and cleanupModel reads it back', () =>
 
     assert.match(command, /^ollama run 'llama3\.2:1b' 'Clean up .*:'$/);
     assert.equal(cleanupModel(command), 'llama3.2:1b');
+});
+
+const WRAPPER_PATH = join(import.meta.dirname, '..', '..', 'bin', 'voxtype-cleanup.py');
+
+test('claudeCleanupCommand runs the wrapper from wherever the extension is installed', () => {
+    const command = claudeCleanupCommand("/home/o'neil/ext");
+
+    assert.match(command, /^python3 '\/home\/o'\\''neil\/ext\/bin\/voxtype-cleanup\.py' --model haiku --effort low --prompt '/);
+    assert.equal(cleanupPrompt(command), DEFAULT_CLEANUP_PROMPT);
+});
+
+test('the default prompt matches the one in the wrapper', () => {
+    const source = readFileSync(WRAPPER_PATH, 'utf8');
+    const start = source.indexOf('DEFAULT_PROMPT = (');
+    const parsed = spawnSync('python3', ['-c', `${source.slice(start, source.indexOf('\n\n', start))}\nprint(DEFAULT_PROMPT)`], { encoding: 'utf8' });
+
+    assert.equal(parsed.stdout.trim(), DEFAULT_CLEANUP_PROMPT);
+});
+
+test('cleanupPrompt reads quoted prompts, and shows the default when there is none', () => {
+    const wrapper = "python3 '/x y/bin/voxtype-cleanup.py'";
+
+    assert.equal(cleanupPrompt(`${wrapper} --prompt 'Fix: $text'`), 'Fix: $text');
+    assert.equal(cleanupPrompt(`${wrapper} --prompt "Fix \\"this\\": \\\\ ok"`), 'Fix "this": \\ ok');
+    assert.equal(cleanupPrompt(`${wrapper} --prompt='Fix it'`), 'Fix it');
+    assert.equal(cleanupPrompt(`${wrapper} --prompt 'don'\\''t'`), "don't");
+    assert.equal(cleanupPrompt(wrapper), DEFAULT_CLEANUP_PROMPT);
+});
+
+test('cleanupPrompt gives up on other commands and anything it could not rewrite safely', () => {
+    assert.equal(cleanupPrompt("ollama run llama3.2:1b 'Clean up'"), null);
+    assert.equal(cleanupPrompt('python3 /x/bin/voxtype-cleanup.py | tee log'), null);
+    assert.equal(cleanupPrompt('python3 /x/bin/voxtype-cleanup.py --prompt "$HOME"'), null);
+    assert.equal(cleanupPrompt("python3 /x/bin/voxtype-cleanup.py --prompt 'unfinished"), null);
+    assert.equal(cleanupPrompt(''), null);
+});
+
+test('withCleanupPrompt keeps the other arguments and survives awkward text', () => {
+    const start = "python3 '/x y/bin/voxtype-cleanup.py' --model sonnet --effort high --prompt old";
+
+    for (const prompt of ["don't \"quote\" $100\nline two: $text", 'plain', '--prompt', '\\ back']) {
+        const command = withCleanupPrompt(start, prompt);
+
+        assert.equal(cleanupPrompt(command), prompt);
+        assert.match(command, /--model sonnet --effort high/);
+        assert.equal(command.split('--prompt').length - 1, prompt === '--prompt' ? 2 : 1);
+        assert.equal(spawnSync('sh', ['-c', `printf %s ${command.slice(command.lastIndexOf('--prompt ') + 9)}`], { encoding: 'utf8' }).stdout, prompt);
+    }
+});
+
+test('withCleanupPrompt drops the flag for a blank prompt, and replaces the = form', () => {
+    assert.equal(withCleanupPrompt('python3 /x/bin/voxtype-cleanup.py --prompt old', '  '), 'python3 /x/bin/voxtype-cleanup.py');
+    assert.equal(withCleanupPrompt("python3 /x/bin/voxtype-cleanup.py --prompt='old one'", 'new'), 'python3 /x/bin/voxtype-cleanup.py --prompt new');
 });
 
 test('cleanupModel reads a hand-written Ollama command and ignores other commands', () => {
