@@ -829,7 +829,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         });
     });
 
-    for (const page of ['general', 'indicator', 'dictation', 'models', 'cleanup', 'notifications', 'system']) {
+    for (const page of ['general', 'indicator', 'dictation', 'models', 'cleanup', 'notifications']) {
         test(`the Settings window opens on the ${page} page without errors`, async () => {
             closeSettings();
             clearCalls();

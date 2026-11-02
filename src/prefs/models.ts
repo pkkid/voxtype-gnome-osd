@@ -332,11 +332,11 @@ export function modelLocation(accelJson: string): 'gpu' | 'cpu' | null {
 // voxtype only knows where a model went once one has loaded, so before that it reports "unknown".
 export function modelPlace(location: 'gpu' | 'cpu' | null, isOnDemand: boolean): string {
     if (location === null) {
-        return isOnDemand ? 'Not loaded until you dictate' : 'Not confirmed yet';
+        return isOnDemand ? 'Model is not loaded until you dictate.' : 'Voxtype has not reported where the model is loaded yet.';
     }
 
-    const place = location === 'gpu' ? 'GPU memory' : 'System memory';
-    return isOnDemand ? `${place}, only while dictating` : place;
+    const place = location === 'gpu' ? 'GPU memory' : 'system memory';
+    return isOnDemand ? `Model is loaded in ${place} only while you dictate.` : `Model is loaded in ${place}.`;
 }
 
 // Whether the running daemon is a GPU build, which holds until a model proves otherwise.

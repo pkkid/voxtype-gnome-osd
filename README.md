@@ -29,24 +29,26 @@ click opens a menu with the current status, start/stop dictation, a switch for t
 
 **Settings window** (`gnome-extensions prefs voxtype-osd@theoodawara`):
 
-- **General:** run voxtype now / at login, the dictation shortcut and whether it is held or tapped, and
-  how the panel icon behaves. The shortcut is saved to voxtype's own `[hotkey]` config and voxtype is
+- **General:** run voxtype now / at login, open voxtype's config file, the dictation shortcut and whether
+  it is held or tapped, and how the panel icon behaves. The shortcut is saved to voxtype's own `[hotkey]` config and voxtype is
   restarted to apply it: a GNOME shortcut never sees the key being released, so it cannot do
   push-to-talk, and while held it repeats and turns dictation on and off.
 - **Indicator:** show or hide the indicator and voxtype's own display (`osd.enabled`), the indicator's
   style, the waveform, the accent color and its position.
-- **Dictation:** live transcription, delivery mode, and microphone options from voxtype's own config.
+- **Dictation:** live transcription, typing options and microphone options from voxtype's own config.
+  The microphone list shows one entry per sound card, by its Sound settings name, because voxtype takes
+  ALSA names and lists every route to every card.
 - **Models:** pick a dictation model and the extension sets up what it needs. Compare, download and
   remove models, and see which can use the GPU or do live transcription. Below that, choose whether to
-  use the GPU, see whether the model is in system or GPU memory and how much of each is in use, and
-  turn on on-demand model loading.
+  use the GPU, see whether the model is in system or GPU memory and how much of each is in use, turn on
+  on-demand model loading, and find the models folder.
 - **Cleanup:** optional text cleanup through a command of your choice, for dictation and for Cleanup
   Anything. One click sets it to the bundled wrapper for Claude Code.
 - **Notifications:** which of voxtype's notifications to show.
-- **System:** the models folder, the total space used and the config file.
 
 Voxtype's options come from `voxtype config schema --json`, including their labels and ranges. Changes
-are written with `voxtype config set`, and a banner offers to restart voxtype when a change needs it.
+are written with `voxtype config set`, and a notice under the tabs offers to restart voxtype when a
+change needs it.
 
 <p align="center">
   <img src="docs/images/settings-indicator.png" width="620" alt="Indicator settings">

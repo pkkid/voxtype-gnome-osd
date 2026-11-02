@@ -299,11 +299,11 @@ test('modelLocation says which memory holds the model, and nothing it cannot tel
 });
 
 test('modelPlace explains a model that has not loaded instead of saying unknown', () => {
-    assert.equal(modelPlace('gpu', false), 'GPU memory');
-    assert.equal(modelPlace('cpu', false), 'System memory');
-    assert.equal(modelPlace('gpu', true), 'GPU memory, only while dictating');
-    assert.equal(modelPlace(null, true), 'Not loaded until you dictate');
-    assert.equal(modelPlace(null, false), 'Not confirmed yet');
+    assert.equal(modelPlace('gpu', false), 'Model is loaded in GPU memory.');
+    assert.equal(modelPlace('cpu', false), 'Model is loaded in system memory.');
+    assert.equal(modelPlace('gpu', true), 'Model is loaded in GPU memory only while you dictate.');
+    assert.equal(modelPlace(null, true), 'Model is not loaded until you dictate.');
+    assert.equal(modelPlace(null, false), 'Voxtype has not reported where the model is loaded yet.');
 });
 
 test('onGpuBuild reads the backend of the running build', () => {

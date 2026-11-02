@@ -24,9 +24,11 @@ type RunsOptions = {
     onDemand: OnDemandSetting | null;
     // Voxtype silently drops live transcription for Whisper when it has to load on demand.
     liveLocked: boolean;
+    modelsDir: string;
+    modelsBytes: number;
 };
 
-export function buildRunsGroup(window: Adw.PreferencesWindow, { gpuRow, onDemand, liveLocked }: RunsOptions): Adw.PreferencesGroup {
+export function buildRunsGroup(window: Adw.PreferencesWindow, { gpuRow, onDemand, liveLocked, modelsDir, modelsBytes }: RunsOptions): Adw.PreferencesGroup {
     const group = new Adw.PreferencesGroup({ title: 'Where it runs' });
     if (gpuRow !== null) {
         group.add(gpuRow);
@@ -50,20 +52,14 @@ export function buildRunsGroup(window: Adw.PreferencesWindow, { gpuRow, onDemand
     }
 
     // Anything but a row lands below the list, which keeps this reading as information, not an option.
+    group.add(buildFolderSummary(modelsDir, modelsBytes));
     group.add(buildMemorySummary(isOnDemand));
     return group;
 }
 
 // Measured only while it is on screen, because asking about video memory runs nvidia-smi.
 function buildMemorySummary(isOnDemand: boolean): Gtk.Label {
-    const label = new Gtk.Label({
-        xalign: 0,
-        wrap: true,
-        margin_top: 10,
-        margin_start: 12,
-        margin_end: 12,
-        css_classes: ['caption', 'dimmed'],
-    });
+    const label = buildSummaryLabel();
 
     const refresh = async () => {
         const [memory, accel] = await Promise.all([serviceMemory(), run(['voxtype', 'info', 'accel', '--json'])]);
@@ -76,9 +72,9 @@ function buildMemorySummary(isOnDemand: boolean): Gtk.Label {
         const video = accel.ok ? gpuMemory(accel.stdout) : null;
         const showVideo = accel.ok && location !== 'cpu' && onGpuBuild(accel.stdout);
         label.label = [
-            `Model is loaded in: ${modelPlace(location, isOnDemand)}`,
-            `System memory in use: ${formatBytes(memory)}`,
-            ...(showVideo ? [`GPU memory in use: ${video !== null ? formatBytes(video) : isOnDemand ? 'None until you dictate' : 'Not reported'}`] : []),
+            modelPlace(location, isOnDemand),
+            `${formatBytes(memory)} of system memory is in use.`,
+            ...(showVideo ? [video !== null || isOnDemand ? `${video ? formatBytes(video) : '0 MB'} of GPU memory is in use.` : 'Your GPU does not report its memory use.'] : []),
         ].join('\n');
     };
 
@@ -96,4 +92,24 @@ function buildMemorySummary(isOnDemand: boolean): Gtk.Label {
     });
 
     return label;
+}
+
+// The path is a link because this is the only way to the folder in the Settings window.
+function buildFolderSummary(modelsDir: string, modelsBytes: number): Gtk.Label {
+    const label = buildSummaryLabel();
+    label.margin_top = 10;
+    const uri = GLib.markup_escape_text(GLib.filename_to_uri(modelsDir, null), -1);
+    const path = GLib.markup_escape_text(modelsDir, -1);
+    label.set_markup(`Models are stored in <a href="${uri}">${path}</a> and use ${formatBytes(modelsBytes)}.`);
+    return label;
+}
+
+function buildSummaryLabel(): Gtk.Label {
+    return new Gtk.Label({
+        xalign: 0,
+        wrap: true,
+        margin_start: 12,
+        margin_end: 12,
+        css_classes: ['caption', 'dimmed'],
+    });
 }

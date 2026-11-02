@@ -169,6 +169,8 @@ async function fillModelsPage(state: PageState): Promise<void> {
         gpuRow: buildGpuRow(facts, accelResult.ok ? accelResult.stdout : ''),
         onDemand: onDemand?.compiled === true ? onDemand : null,
         liveLocked: activeEngine === 'whisper' && facts.liveOn,
+        modelsDir: facts.modelsDir,
+        modelsBytes: pathSize(Gio.File.new_for_path(facts.modelsDir)),
     }));
 }
 
@@ -345,10 +347,7 @@ function modelPills(facts: Facts, model: DictationModel, size: string): string[]
 }
 
 function buildModelsGroup(facts: Facts, models: DictationModel[]): Adw.PreferencesGroup {
-    const group = new Adw.PreferencesGroup({
-        title: 'Your models',
-        description: 'Pick the model that turns your speech into text. Voxtype uses one at a time, and choosing one restarts it.',
-    });
+    const group = new Adw.PreferencesGroup();
 
     // Never shown. GTK only draws radio buttons in a group, and one alone is a checkbox that can be
     // unticked, so even a single model needs something to be grouped with.

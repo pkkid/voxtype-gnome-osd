@@ -101,17 +101,10 @@ function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
         dialog: new Gtk.ColorDialog({ title: 'Accent color', with_alpha: false }),
         valign: Gtk.Align.CENTER,
     });
-    const resetButton = new Gtk.Button({
-        icon_name: 'edit-undo-symbolic',
-        tooltip_text: 'Reset to the default red',
-        valign: Gtk.Align.CENTER,
-        css_classes: ['flat'],
-    });
     const row = new Adw.ActionRow({
         title: 'Accent color',
         subtitle: 'Used for the waveform, the Classic border and the panel icon. The recording dot stays red.',
     });
-    row.add_suffix(resetButton);
     row.add_suffix(colorButton);
 
     // The setting is a #rrggbb string and the button holds a Gdk.RGBA, so sync them by hand.
@@ -120,7 +113,6 @@ function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
         if (rgbToHex(colorButton.rgba.red, colorButton.rgba.green, colorButton.rgba.blue) !== rgbToHex(red, green, blue)) {
             colorButton.rgba = new Gdk.RGBA({ red, green, blue, alpha: 1 });
         }
-        resetButton.sensitive = settings.get_user_value('accent-color') !== null;
     };
 
     colorButton.connect('notify::rgba', () => {
@@ -129,7 +121,6 @@ function buildAccentColorRow(settings: Gio.Settings): Adw.ActionRow {
             settings.set_string('accent-color', hex);
         }
     });
-    resetButton.connect('clicked', () => settings.reset('accent-color'));
     const changedId = settings.connect('changed::accent-color', syncButton);
     row.connect('destroy', () => settings.disconnect(changedId));
     syncButton();

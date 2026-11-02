@@ -2,10 +2,10 @@ import Adw from 'gi://Adw';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
-import { isServiceActive, restartService } from '../systemd.js';
 import { firstLine, run } from '../voxtype.js';
-import { choiceModel } from './choices.js';
+import { choiceModel, inputDeviceLabel, inputDevices, parseCardNames } from './choices.js';
 import { LIVE_PARAKEET_MODEL } from './models.js';
+import { noteRestartNeeded } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 const NUMBER_APPLY_DELAY_MS = 600;
@@ -20,8 +20,6 @@ export type SchemaPageContent = {
     title: string;
     icon: string;
     groups: SchemaGroup[];
-    // Anything else the page shows, added below the settings once voxtype has answered.
-    fill?: (page: Adw.PreferencesPage, configPath: string) => void;
 };
 
 export const DICTATION_PAGE: SchemaPageContent = {
@@ -30,8 +28,8 @@ export const DICTATION_PAGE: SchemaPageContent = {
     icon: 'audio-input-microphone-symbolic',
     groups: [
         {
-            title: 'Dictation',
-            keys: ['whisper.streaming', 'parakeet.streaming', 'output.mode', 'output.auto_submit', 'output.fallback_to_clipboard'],
+            title: '',
+            keys: ['whisper.streaming', 'parakeet.streaming', 'output.auto_submit', 'output.fallback_to_clipboard'],
         },
         {
             title: 'Microphone',
@@ -57,10 +55,16 @@ export const NOTIFICATIONS_PAGE: SchemaPageContent = {
     ],
 };
 
-// Voxtype's own name for these is "Streaming transcription"; the Models page says live transcription.
+// Voxtype's own name for live transcription is "Streaming transcription"; the Models page says live.
 const LABELS: Record<string, string> = {
     'whisper.streaming': 'Live transcription',
     'parakeet.streaming': 'Live transcription',
+    'audio.duck_media': 'Lower media while recording',
+};
+
+// Voxtype's words describe its device names, which this page replaces with the names of the cards.
+const DESCRIPTIONS: Record<string, string> = {
+    'audio.device': 'The microphone Voxtype listens to. System default follows your Sound settings.',
 };
 
 // Facts voxtype's own descriptions leave out.
@@ -69,8 +73,7 @@ const DESCRIPTION_NOTES: Record<string, string> = {
     'parakeet.streaming': 'Voxtype requires Toggle for this, so your shortcut becomes press to start, press again to stop. Only works with the Parakeet Unified model, from the Models page.',
 };
 
-// Rows go stale when the Models page changes the engine or model. Only pages without a `fill` are
-// listed, because what `fill` adds would be added twice.
+// Rows go stale when the Models page changes the engine or model.
 const refreshers = new WeakMap<Adw.PreferencesWindow, (() => void)[]>();
 
 export function refreshSchemaPages(window: Adw.PreferencesWindow): void {
@@ -95,13 +98,17 @@ type SchemaKey = {
 };
 
 type VoxtypeSchema = {
-    config_path: string;
     keys: SchemaKey[];
 };
 
 type AudioDevice = {
     name: string;
     default: boolean;
+};
+
+type InputDevices = {
+    names: string[];
+    label: (name: string) => string;
 };
 
 // Fills in once voxtype has described its settings, so the window opens straight away.
@@ -118,9 +125,7 @@ export function buildSchemaPage(window: Adw.PreferencesWindow, content: SchemaPa
         });
     };
 
-    if (content.fill === undefined) {
-        refreshers.set(window, [...refreshers.get(window) ?? [], refresh]);
-    }
+    refreshers.set(window, [...refreshers.get(window) ?? [], refresh]);
     refresh();
     return page;
 }
@@ -142,6 +147,7 @@ async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.Preferenc
     const schema = JSON.parse(schemaResult.stdout) as VoxtypeSchema;
     for (const entry of schema.keys) {
         entry.label = LABELS[entry.key] ?? entry.label;
+        entry.description = DESCRIPTIONS[entry.key] ?? entry.description;
         if (entry.key in DESCRIPTION_NOTES) {
             entry.description = `${entry.description} ${DESCRIPTION_NOTES[entry.key]}`;
         }
@@ -151,23 +157,6 @@ async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.Preferenc
     const applies = (entry: SchemaKey) => entry.compiled && (!entry.engine || activeEngine === null || entry.engine === activeEngine);
     const keys = new Map(schema.keys.filter(applies).map(entry => [entry.key, entry]));
     const devices = await loadDevices();
-
-    const banner = new Adw.Banner({
-        title: 'Restart Voxtype to apply your changes',
-        button_label: 'Restart',
-        revealed: false,
-    });
-    banner.connect('button-clicked', () => {
-        restartService().then(result => {
-            if (result.ok) {
-                banner.revealed = false;
-                showToast(window, 'Voxtype restarted');
-            } else {
-                showToast(window, `Could not restart Voxtype: ${firstLine(result.stderr)}`);
-            }
-        });
-    });
-    page.banner = banner;
 
     const apply = async (entry: SchemaKey, value: string | null) => {
         const argv = value === null
@@ -180,8 +169,8 @@ async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.Preferenc
             return;
         }
 
-        if (entry.restart_required && await isServiceActive()) {
-            banner.revealed = true;
+        if (entry.restart_required) {
+            await noteRestartNeeded(window);
         }
     };
 
@@ -206,13 +195,11 @@ async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.Preferenc
             page.add(group);
         }
     }
-
-    content.fill?.(page, schema.config_path);
 }
 
 type Apply = (entry: SchemaKey, value: string | null) => Promise<void>;
 
-function buildSchemaRow(entry: SchemaKey, devices: AudioDevice[], apply: Apply): Adw.PreferencesRow | null {
+function buildSchemaRow(entry: SchemaKey, devices: InputDevices, apply: Apply): Adw.PreferencesRow | null {
     switch (entry.type) {
     case 'bool':
         return buildSwitchRow(entry, apply);
@@ -220,7 +207,7 @@ function buildSchemaRow(entry: SchemaKey, devices: AudioDevice[], apply: Apply):
         return buildChoiceRow(entry, entry.choices ?? [], apply);
     case 'dynamic_enum':
         if (entry.source === 'devices') {
-            return buildChoiceRow(entry, devices.map(device => device.name), apply);
+            return buildChoiceRow(entry, devices.names, apply, devices.label);
         }
         return null;
     case 'int':
@@ -243,8 +230,8 @@ function buildSwitchRow(entry: SchemaKey, apply: Apply): Adw.SwitchRow {
     return row;
 }
 
-function buildChoiceRow(entry: SchemaKey, choices: string[], apply: Apply): Adw.ComboRow | null {
-    const model = choiceModel(choices, entry.value);
+function buildChoiceRow(entry: SchemaKey, choices: string[], apply: Apply, label?: (value: string) => string): Adw.ComboRow | null {
+    const model = choiceModel(choices, entry.value, label);
     if (model === null) {
         return null;
     }
@@ -297,15 +284,17 @@ function buildTextRow(entry: SchemaKey, apply: Apply): Adw.EntryRow {
     return row;
 }
 
-async function loadDevices(): Promise<AudioDevice[]> {
-    const result = await run(['voxtype', 'info', 'devices', '--json']);
-    if (!result.ok) {
-        return [];
-    }
+async function loadDevices(): Promise<InputDevices> {
+    const [devices, cards] = await Promise.all([
+        run(['voxtype', 'info', 'devices', '--json']),
+        run(['pactl', '--format=json', 'list', 'cards']),
+    ]);
+    const cardNames = parseCardNames(cards.stdout);
+    const label = (name: string) => inputDeviceLabel(name, cardNames);
 
     try {
-        return JSON.parse(result.stdout) as AudioDevice[];
+        return { names: inputDevices((JSON.parse(devices.stdout) as AudioDevice[]).map(device => device.name)), label };
     } catch {
-        return [];
+        return { names: [], label };
     }
 }

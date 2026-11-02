@@ -3,8 +3,11 @@ import Gdk from 'gi://Gdk';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
-// Below this width the sidebar and the page take turns instead of sitting side by side.
-const COLLAPSE_CONDITION = 'max-width: 600sp';
+import { restartService } from '../systemd.js';
+import { firstLine } from '../voxtype.js';
+
+// The sidebar's narrowest width plus room for a page, so the two always sit side by side.
+const MIN_WINDOW_WIDTH = 720;
 const HEADER_MARGIN_TOP = 18;
 const HEADER_UNDER_BAR_MARGIN_TOP = 6;
 
@@ -45,6 +48,12 @@ const PREFS_CSS = `
     padding: 10px 12px;
 }
 
+.voxtype-restart-notice {
+    padding: 10px;
+    border-radius: 10px;
+    background-color: alpha(currentColor, 0.07);
+}
+
 .voxtype-pill {
     padding: 1px 8px;
     border-radius: 99px;
@@ -83,7 +92,13 @@ const PREFS_CSS = `
     opacity: 1;
 }
 
-.voxtype-download-list .voxtype-pill {
+.voxtype-download-list .voxtype-restart-notice {
+    padding: 10px;
+    border-radius: 10px;
+    background-color: alpha(currentColor, 0.07);
+}
+
+.voxtype-pill {
     padding: 0 7px;
     font-size: 0.72em;
 }
@@ -114,12 +129,14 @@ export type SidebarHeader = {
 };
 
 const toastOverlays = new WeakMap<Adw.PreferencesWindow, Adw.ToastOverlay>();
+const restartNotices = new WeakMap<Adw.PreferencesWindow, Gtk.Revealer>();
 let cssLoaded = false;
 
 // Replaces the stock page switcher with a sidebar: a header naming the extension above a list of
 // pages, and the selected page on the right.
 export function setSidebarContent(window: Adw.PreferencesWindow, header: SidebarHeader, pages: Adw.PreferencesPage[]): void {
     ensurePrefsCss();
+    window.width_request = MIN_WINDOW_WIDTH;
 
     // The prefs service refuses to show a window whose stock view has no visible page, so it gets an
     // empty one; the real pages live in the sidebar layout set as the window content below.
@@ -153,6 +170,7 @@ export function setSidebarContent(window: Adw.PreferencesWindow, header: Sidebar
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vexpand: true,
     }));
+    sidebarBox.append(buildRestartNotice(window));
 
     const sidebarHeaderBar = new Adw.HeaderBar({ show_title: false });
     const sidebarView = new Adw.ToolbarView({ content: sidebarBox });
@@ -166,16 +184,15 @@ export function setSidebarContent(window: Adw.PreferencesWindow, header: Sidebar
         max_sidebar_width: 240,
     });
 
-    // The sidebar's header bar only holds window buttons when they sit on the left, or when the
-    // sidebar is shown alone. Otherwise it is empty, so hide it and let the header sit at the top.
+    // The sidebar's header bar only holds window buttons when they sit on the left. Otherwise it is
+    // empty, so hide it and let the header sit at the top.
     const windowControls = new Gtk.WindowControls({ side: Gtk.PackType.START, visible: false });
     sidebarBox.append(windowControls);
     const syncSidebarHeaderBar = () => {
-        sidebarHeaderBar.visible = split.collapsed || !windowControls.empty;
+        sidebarHeaderBar.visible = !windowControls.empty;
         headerBox.margin_top = sidebarHeaderBar.visible ? HEADER_UNDER_BAR_MARGIN_TOP : HEADER_MARGIN_TOP;
     };
     windowControls.connect('notify::empty', syncSidebarHeaderBar);
-    split.connect('notify::collapsed', syncSidebarHeaderBar);
     syncSidebarHeaderBar();
 
     list.connect('row-selected', (_list, row: Gtk.ListBoxRow | null) => {
@@ -185,16 +202,9 @@ export function setSidebarContent(window: Adw.PreferencesWindow, header: Sidebar
             contentPage.title = page.title;
         }
     });
-    list.connect('row-activated', () => {
-        split.show_content = true;
-    });
     // VOXTYPE_OSD_PREFS_PAGE=<page name> opens another page first; the shell tests use it.
     const firstPage = Math.max(0, pages.findIndex(page => page.name === GLib.getenv('VOXTYPE_OSD_PREFS_PAGE')));
     list.select_row(list.get_row_at_index(firstPage));
-
-    const breakpoint = new Adw.Breakpoint({ condition: Adw.BreakpointCondition.parse(COLLAPSE_CONDITION) });
-    breakpoint.add_setter(split, 'collapsed', true);
-    window.add_breakpoint(breakpoint);
 
     const overlay = new Adw.ToastOverlay({ child: split });
     window.set_content(overlay);
@@ -209,6 +219,13 @@ export function showToast(window: Adw.PreferencesWindow, title: string): void {
         window.add_toast(toast);
     } else {
         overlay.add_toast(toast);
+    }
+}
+
+export function setRestartNotice(window: Adw.PreferencesWindow, shown: boolean): void {
+    const notice = restartNotices.get(window);
+    if (notice !== undefined) {
+        notice.reveal_child = shown;
     }
 }
 
@@ -244,6 +261,42 @@ function buildSidebarHeader({ title, subtitle, iconName }: SidebarHeader): Gtk.B
     box.append(labels);
 
     return box;
+}
+
+function buildRestartNotice(window: Adw.PreferencesWindow): Gtk.Revealer {
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+        margin_top: 6,
+        margin_bottom: 12,
+        margin_start: 12,
+        margin_end: 12,
+        css_classes: ['voxtype-restart-notice'],
+    });
+    box.append(new Gtk.Label({
+        label: 'Restart Voxtype to apply your changes',
+        xalign: 0,
+        wrap: true,
+        css_classes: ['caption'],
+    }));
+
+    const button = new Gtk.Button({ label: 'Restart', css_classes: ['pill'] });
+    button.add_css_class('voxtype-compact-button');
+    button.connect('clicked', () => {
+        restartService().then(result => {
+            if (result.ok) {
+                setRestartNotice(window, false);
+                showToast(window, 'Voxtype restarted');
+            } else {
+                showToast(window, `Could not restart Voxtype: ${firstLine(result.stderr)}`);
+            }
+        });
+    });
+    box.append(button);
+
+    const notice = new Gtk.Revealer({ child: box, reveal_child: false });
+    restartNotices.set(window, notice);
+    return notice;
 }
 
 function buildSidebarRow(page: Adw.PreferencesPage): Gtk.ListBoxRow {
