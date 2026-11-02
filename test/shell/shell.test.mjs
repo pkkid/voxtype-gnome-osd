@@ -10,6 +10,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +20,7 @@ const UUID = 'voxtype-osd@theoodawara';
 const HELPER_UUID = 'test-helper@voxtype-osd';
 const SCHEMA_ID = 'org.gnome.shell.extensions.voxtype-osd';
 const ACTIVE = 1;
+const ERROR = 3;
 const ACTION_MODE_NORMAL = 1;
 const INACTIVE = 2;
 const DEFAULT_ACCENT = '#c0bfbc';
@@ -463,6 +465,10 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         await waitFor(s => s.indicator.menuOpen && s.indicator.menuWidth > 0, 'the menu to open');
         await sleep(100);
         const { indicator: placed } = inspect();
+        if (SCREENSHOTS !== null) {
+            await sleep(500);
+            screenshot('panel-menu', [Math.round(placed.menuCenterX - 125), 0, 250, 280]);
+        }
         helper('CloseMenu');
 
         assert.ok(Math.abs(placed.menuCenterX - placed.iconCenterX) <= 1, `menu at ${placed.menuCenterX}, icon at ${placed.iconCenterX}`);
@@ -538,6 +544,36 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
         await setEnabled(true);
         await waitFor(s => s.indicator?.status === 'Voxtype is ready' && hidden(s), 'the extension to settle');
+        assertNoErrors();
+    });
+
+    test('forgets the state it had when disabled', async () => {
+        writeState('recording');
+        await waitFor(shown, 'the indicator to appear');
+        await setEnabled(false);
+        writeState(null);
+        await setEnabled(true);
+        await waitFor(s => s.indicator.status === 'Voxtype is stopped', 'voxtype to count as stopped');
+
+        setSetting('show-pill', false);
+        setSetting('show-pill', true);
+        await sleep(300);
+        assert.equal(hidden(inspect()), true, 'a setting change must not bring back the old recording');
+        assert.equal(bridgeRunning(), false);
+        assertNoErrors();
+    });
+
+    test('leaves nothing behind when it fails to start', async () => {
+        await setEnabled(false);
+        helper('BlockPanelRole', true);
+        helper('SetExtensionEnabled', true);
+        await waitFor(s => s.extensionState === ERROR, 'the extension to fail');
+        assert.equal(inspect().pill, null, 'the indicator pill must not be left on screen');
+
+        newErrors();
+        helper('BlockPanelRole', false);
+        helper('ReloadExtension');
+        await waitFor(s => s.extensionState === ACTIVE && s.indicator !== null, 'the extension to come back');
         assertNoErrors();
     });
 
@@ -642,9 +678,10 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         const FIELD = 'hello world';
         const CLIPBOARD = 'what was on the clipboard';
 
-        function openEditor(appId, text, file) {
+        function openEditor(appId, text, file, owned = null) {
             rmSync(path(file), { force: true });
-            const app = spawn('gjs', ['-m', join(ROOT, 'test', 'shell', 'helper', 'editor.js'), appId, path(file), text], {
+            rmSync(path(`${file}.keys`), { force: true });
+            const app = spawn('gjs', ['-m', join(ROOT, 'test', 'shell', 'helper', 'editor.js'), appId, path(file), text, ...(owned === null ? [] : [owned.type, owned.file])], {
                 env: { ...env, WAYLAND_DISPLAY: 'wayland-0', GDK_BACKEND: 'wayland', GSK_RENDERER: 'cairo' },
                 stdio: 'ignore',
             });
@@ -653,6 +690,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         }
 
         const field = (file = 'field.txt') => readFileSync(path(file), 'utf8');
+        const shortcuts = (file = 'field.txt') => (existsSync(path(`${file}.keys`)) ? readFileSync(path(`${file}.keys`), 'utf8').trim().split('\n') : []);
 
         function clipboard() {
             rmSync(path('clipboard.txt'), { force: true });
@@ -660,15 +698,33 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             return readFileSync(path('clipboard.txt'), 'utf8');
         }
 
-        async function prepare(command, appId = 'org.voxtypeosd.Editor') {
+        function clipboardBytes(type) {
+            rmSync(path('clipboard.bin'), { force: true });
+            helper('SaveClipboardBytes', type, path('clipboard.bin'));
+            return readFileSync(path('clipboard.bin'));
+        }
+
+        async function prepare(command, appId = 'org.voxtypeosd.Editor', owned = null) {
             editors.splice(0).forEach(app => app.kill());
-            openEditor(appId, FIELD, 'field.txt');
+            openEditor(appId, FIELD, 'field.txt', owned);
             await waitFor(s => s.windows.includes(appId), 'the text app');
             await waitUntil(() => field() === FIELD, 'the text app to fill in');
             await waitFor(s => s.actionMode === ACTION_MODE_NORMAL, 'the shell to finish starting');
             await sleep(400);
-            helper('SetClipboard', CLIPBOARD);
-            await waitUntil(() => clipboard() === CLIPBOARD, 'the clipboard to be set');
+            if (owned === null) {
+                helper('SetClipboard', CLIPBOARD);
+                await waitUntil(() => clipboard() === CLIPBOARD, 'the clipboard to be set');
+            } else {
+                // A key pressed just after a window opens can miss it, so this presses again now and then.
+                await waitFor(s => s.focused === appId, 'the text app to take focus');
+                let attempts = 0;
+                await waitUntil(() => {
+                    if (attempts++ % 10 === 0) {
+                        helper('PressKeys', 'z');
+                    }
+                    return clipboardBytes(owned.type).equals(readFileSync(owned.file));
+                }, 'the app to take the clipboard', 10000);
+            }
             setSetting('cleanup-command', command);
             setSetting('cleanup-anything-enabled', true);
             await sleep(100);
@@ -803,6 +859,102 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             await finished();
             assert.equal(field(), FIELD);
             rmSync(path('cleanup.pid'));
+            assertNoErrors();
+        });
+
+        for (const [what, type, contents] of [
+            ['text', 'text/plain;charset=utf-8', Buffer.from('copied from an app')],
+            ['an image', 'image/png', randomBytes(1024 * 1024)],
+        ]) {
+            test(`puts back ${what} copied from another app, byte for byte`, async () => {
+                const owned = { type, file: path('owned.bin') };
+                writeFileSync(owned.file, contents);
+                await prepare('tr a-z A-Z', 'org.voxtypeosd.Editor', owned);
+                doubleTap();
+                await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced');
+                await waitFor(hidden, 'the cleanup to finish', 8000);
+                await waitUntil(() => clipboardBytes(type).equals(contents), 'the clipboard to be put back');
+                assertNoErrors();
+            });
+        }
+
+        test('gives up when the app that owns the clipboard stops answering', async () => {
+            const owned = { type: 'text/plain;charset=utf-8', file: path('owned.bin') };
+            writeFileSync(owned.file, 'copied from an app');
+            await prepare('tr a-z A-Z', 'org.voxtypeosd.Editor', owned);
+            const app = editors[0];
+            app.kill('SIGSTOP');
+            try {
+                doubleTap();
+                await waitFor(s => shown(s) && s.pill.label === 'Cleaning up…', 'the cleanup to start');
+                await waitFor(hidden, 'the cleanup to give up', 6000);
+            } finally {
+                app.kill('SIGCONT');
+            }
+            assert.equal(field(), FIELD);
+        });
+
+        test('sends no keys to a window that took focus while keys were held', async () => {
+            await prepare('sleep 0.3; tr a-z A-Z');
+            doubleTap();
+            await started();
+            helper('HoldKey', 'Shift_L');
+            await sleep(800);
+            openEditor('org.voxtypeosd.Other', 'other text', 'other.txt');
+            await waitFor(s => s.focused === 'org.voxtypeosd.Other', 'the other app to take focus');
+            helper('ReleaseKey', 'Shift_L');
+            await sleep(1000);
+            await finished();
+            assert.deepEqual(shortcuts('other.txt'), []);
+            assert.equal(field(), FIELD);
+            assert.equal(field('other.txt'), 'other text');
+        });
+
+        test('sends no keys once the extension is disabled while keys are held', async () => {
+            await prepare('sleep 0.3; tr a-z A-Z');
+            doubleTap();
+            await started();
+            helper('HoldKey', 'Shift_L');
+            await sleep(800);
+            const before = shortcuts();
+            await setEnabled(false);
+            helper('ReleaseKey', 'Shift_L');
+            await sleep(600);
+            assert.deepEqual(shortcuts(), before);
+            await setEnabled(true);
+            assert.equal(field(), FIELD);
+            await waitUntil(() => clipboard() === CLIPBOARD, 'the clipboard to be put back');
+            assertNoErrors();
+        });
+
+        test('refuses a command that prints far too much', async () => {
+            await prepare('head -c 3000000 /dev/zero | tr \'\\0\' a');
+            doubleTap();
+            await started();
+            await sleep(600);
+            await finished();
+            assert.equal(field(), FIELD);
+            assertNoErrors();
+        });
+
+        test('kills a command that ignores being asked to stop', async () => {
+            await prepare(`trap '' TERM; sleep 30 & echo $! > '${path('cleanup.pid')}'; wait; tr a-z A-Z`);
+            doubleTap();
+            await waitUntil(() => existsSync(path('cleanup.pid')), 'the command to start');
+            const pid = Number(readFileSync(path('cleanup.pid'), 'utf8'));
+            doubleTap();
+            try {
+                await waitUntil(() => !existsSync(`/proc/${pid}`), 'the command to be killed');
+                await finished();
+            } finally {
+                rmSync(path('cleanup.pid'));
+                try {
+                    process.kill(pid, 'SIGKILL');
+                } catch {
+                    // Already gone.
+                }
+            }
+            assert.equal(field(), FIELD);
             assertNoErrors();
         });
 

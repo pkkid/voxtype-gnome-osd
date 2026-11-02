@@ -7,7 +7,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import { accentColor, parseHexColor, RECORDING_DOT_COLOR, Rgb } from './color.js';
 import { DaemonState, isRecording } from './daemonState.js';
-import { AudioSample } from './levels.js';
+import { AudioSample, clampToUnit } from './levels.js';
 import { IndicatorStyle, isIndicatorStyle } from './styles.js';
 import { Waveform, WaveformMode } from './waveform.js';
 
@@ -47,8 +47,6 @@ export class OsdPill {
     private label: St.Label | null = null;
     private dot: St.Widget | null = null;
     private style: IndicatorStyle = 'classic';
-    private readonly signalIds: number[] = [];
-    private monitorsChangedId = 0;
     private state: DaemonState = 'unavailable';
     private cleaningUp = false;
     private positioning = false;
@@ -70,18 +68,19 @@ export class OsdPill {
         this.connectDragHandlers();
 
         Main.layoutManager.addTopChrome(this.container);
-        this.monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this.reposition());
+        Main.layoutManager.connectObject('monitors-changed', () => this.reposition(), this);
 
-        for (const key of ['pill-x', 'pill-y']) {
-            this.signalIds.push(this.settings.connect(`changed::${key}`, () => this.reposition()));
-        }
-        this.signalIds.push(this.settings.connect('changed::show-pill', () => this.render()));
-        this.signalIds.push(this.settings.connect('changed::show-waveform', () => this.render()));
-        this.signalIds.push(this.settings.connect('changed::accent-color', () => this.render()));
-        this.signalIds.push(this.settings.connect('changed::pill-style', () => {
-            this.buildContent();
-            this.render();
-        }));
+        this.settings.connectObject(
+            'changed::pill-x', () => this.reposition(),
+            'changed::pill-y', () => this.reposition(),
+            'changed::show-pill', () => this.render(),
+            'changed::show-waveform', () => this.render(),
+            'changed::accent-color', () => this.render(),
+            'changed::pill-style', () => {
+                this.buildContent();
+                this.render();
+            },
+            this);
 
         this.reposition();
     }
@@ -122,15 +121,8 @@ export class OsdPill {
         this.endDrag(false);
         this.clearPositioningTimeout();
 
-        for (const id of this.signalIds) {
-            this.settings.disconnect(id);
-        }
-        this.signalIds.length = 0;
-
-        if (this.monitorsChangedId !== 0) {
-            Main.layoutManager.disconnect(this.monitorsChangedId);
-            this.monitorsChangedId = 0;
-        }
+        this.settings.disconnectObject(this);
+        Main.layoutManager.disconnectObject(this);
 
         this.waveform.destroy();
         Main.layoutManager.removeChrome(this.container);
@@ -347,8 +339,8 @@ export class OsdPill {
         const [width, height] = this.size();
         const freeWidth = Math.max(1, monitor.width - width);
         const freeHeight = Math.max(1, monitor.height - height);
-        this.settings.set_double('pill-x', clampFraction((x - monitor.x) / freeWidth));
-        this.settings.set_double('pill-y', clampFraction((y - monitor.y) / freeHeight));
+        this.settings.set_double('pill-x', clampToUnit((x - monitor.x) / freeWidth));
+        this.settings.set_double('pill-y', clampToUnit((y - monitor.y) / freeHeight));
     }
 
     private clampToMonitor(x: number, y: number): [number, number] {
@@ -418,8 +410,4 @@ export class OsdPill {
 function readStyle(settings: Gio.Settings): IndicatorStyle {
     const style = settings.get_string('pill-style');
     return isIndicatorStyle(style) ? style : 'classic';
-}
-
-function clampFraction(value: number): number {
-    return Math.min(Math.max(value, 0), 1);
 }

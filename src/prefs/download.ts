@@ -1,12 +1,11 @@
 import Gio from 'gi://Gio';
-import GLib from 'gi://GLib';
+
+import { readChunk, signalProcessGroup } from '../voxtype.js';
 
 export type RunningCommand = {
     cancel: () => void;
     finished: Promise<boolean>;
 };
-
-const READ_SIZE = 4096;
 
 // Runs a long command, passing on each line it prints as it arrives. Progress bars rewrite their
 // line with a carriage return rather than ending it, so that counts as a line ending too.
@@ -23,16 +22,7 @@ export function runWithLines(argv: string[], onLine: (line: string) => void): Ru
         let pending = '';
 
         for (;;) {
-            const bytes = await new Promise<GLib.Bytes>((resolve, reject) => {
-                stdout.read_bytes_async(READ_SIZE, GLib.PRIORITY_DEFAULT, null, (source, result) => {
-                    try {
-                        resolve(source!.read_bytes_finish(result));
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-            });
-
+            const bytes = await readChunk(stdout);
             if (bytes.get_size() === 0) {
                 break;
             }
@@ -60,9 +50,7 @@ export function runWithLines(argv: string[], onLine: (line: string) => void): Ru
     });
 
     return {
-        cancel: () => {
-            Gio.Subprocess.new(['kill', '-TERM', '--', `-${process.get_identifier()}`], Gio.SubprocessFlags.NONE);
-        },
+        cancel: () => signalProcessGroup(process, 'TERM'),
         finished: Promise.all([pump().catch(logError), exited]).then(([, succeeded]) => succeeded),
     };
 }

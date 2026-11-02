@@ -5,7 +5,7 @@ import Gtk from 'gi://Gtk';
 import { firstLine, run } from '../voxtype.js';
 import { choiceModel, inputDeviceLabel, inputDevices, parseCardNames } from './choices.js';
 import { LIVE_PARAKEET_MODEL } from './models.js';
-import { noteRestartNeeded } from './voxtypeConfig.js';
+import { loadSchema, noteRestartNeeded, SchemaKey } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 const NUMBER_APPLY_DELAY_MS = 600;
@@ -80,27 +80,6 @@ export function refreshSchemaPages(window: Adw.PreferencesWindow): void {
     refreshers.get(window)?.forEach(refresh => refresh());
 }
 
-type SchemaValue = string | number | boolean | null;
-
-type SchemaKey = {
-    key: string;
-    label: string;
-    description: string;
-    type: 'bool' | 'string' | 'int' | 'float' | 'enum' | 'dynamic_enum';
-    value: SchemaValue;
-    choices?: string[];
-    min?: number;
-    max?: number;
-    source?: string;
-    engine?: string | null;
-    compiled: boolean;
-    restart_required: boolean;
-};
-
-type VoxtypeSchema = {
-    keys: SchemaKey[];
-};
-
 type AudioDevice = {
     name: string;
     default: boolean;
@@ -131,20 +110,19 @@ export function buildSchemaPage(window: Adw.PreferencesWindow, content: SchemaPa
 }
 
 async function fillSchemaPage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage, content: SchemaPageContent, groups: Adw.PreferencesGroup[]): Promise<void> {
-    const schemaResult = await run(['voxtype', 'config', 'schema', '--json']);
+    const schema = await loadSchema();
     groups.splice(0).forEach(group => page.remove(group));
 
-    if (!schemaResult.ok) {
+    if (typeof schema === 'string') {
         const group = new Adw.PreferencesGroup({
             title: 'Voxtype settings unavailable',
-            description: `Could not run "voxtype config schema": ${firstLine(schemaResult.stderr)}`,
+            description: `Could not run "voxtype config schema": ${schema}`,
         });
         groups.push(group);
         page.add(group);
         return;
     }
 
-    const schema = JSON.parse(schemaResult.stdout) as VoxtypeSchema;
     for (const entry of schema.keys) {
         entry.label = LABELS[entry.key] ?? entry.label;
         entry.description = DESCRIPTIONS[entry.key] ?? entry.description;

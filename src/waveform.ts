@@ -74,7 +74,7 @@ export class Waveform {
         this.actor.queue_repaint();
 
         if (mode === 'still') {
-            this.stopTimer();
+            this.stop();
             return;
         }
 
@@ -89,16 +89,12 @@ export class Waveform {
         });
     }
 
-    stop(): void {
-        this.stopTimer();
-    }
-
     destroy(): void {
-        this.stopTimer();
+        this.stop();
         this.actor.destroy();
     }
 
-    private stopTimer(): void {
+    stop(): void {
         if (this.redrawSourceId !== 0) {
             GLib.source_remove(this.redrawSourceId);
             this.redrawSourceId = 0;

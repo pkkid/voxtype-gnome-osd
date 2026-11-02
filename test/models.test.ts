@@ -22,7 +22,6 @@ import {
     modelLocation,
     modelPlace,
     onGpuBuild,
-    installedModels,
     isActiveModel,
     modelDisplayName,
     modelFileNames,
@@ -43,13 +42,6 @@ const CATALOG = {
         },
     },
 };
-
-test('installedModels keeps only what is downloaded, with its engine', () => {
-    assert.deepEqual(installedModels(CATALOG), [
-        { engine: 'moonshine', name: 'base', downloadArg: 'moonshine-base' },
-        { engine: 'whisper', name: 'base.en', downloadArg: 'base.en' },
-    ]);
-});
 
 test('isActiveModel accepts either name, because engines differ in which the config holds', () => {
     const model = { engine: 'sensevoice', name: 'small', downloadArg: 'sensevoice-small' };

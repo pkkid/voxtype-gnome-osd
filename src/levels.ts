@@ -4,43 +4,17 @@ export type AudioSample = {
 
 export const WAVEFORM_GAIN = 10;
 
-function clampToUnit(value: number): number {
-    if (value < 0) {
-        return 0;
-    }
-    if (value > 1) {
-        return 1;
-    }
-    return value;
-}
-
-function isUsableNumber(value: unknown): value is number {
-    return typeof value === 'number' && Number.isFinite(value);
+export function clampToUnit(value: number): number {
+    return Math.min(Math.max(value, 0), 1);
 }
 
 export function parseBridgeLine(line: string): AudioSample | null {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
-        return null;
-    }
-
-    let payload: unknown;
     try {
-        payload = JSON.parse(trimmed);
+        const peak = (JSON.parse(line) as { peak?: unknown } | null)?.peak;
+        return typeof peak === 'number' && Number.isFinite(peak) ? { peak: clampToUnit(peak) } : null;
     } catch {
         return null;
     }
-
-    if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
-        return null;
-    }
-
-    const fields = payload as Record<string, unknown>;
-    if (!isUsableNumber(fields.peak)) {
-        return null;
-    }
-
-    return { peak: clampToUnit(fields.peak) };
 }
 
 // Smoothing for the overall level: rise quickly with the voice, fall back slowly.

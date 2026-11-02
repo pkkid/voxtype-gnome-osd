@@ -55,11 +55,11 @@ const PREFS_CSS = `
 }
 
 .voxtype-pill {
-    padding: 1px 8px;
+    padding: 0 7px;
     border-radius: 99px;
     border: 1px solid alpha(currentColor, 0.15);
     color: alpha(currentColor, 0.7);
-    font-size: 0.82em;
+    font-size: 0.72em;
 }
 
 .voxtype-pill-size {
@@ -90,17 +90,6 @@ const PREFS_CSS = `
 
 .voxtype-download-list row:hover .voxtype-download-text {
     opacity: 1;
-}
-
-.voxtype-download-list .voxtype-restart-notice {
-    padding: 10px;
-    border-radius: 10px;
-    background-color: alpha(currentColor, 0.07);
-}
-
-.voxtype-pill {
-    padding: 0 7px;
-    font-size: 0.72em;
 }
 
 .voxtype-download-list .voxtype-pill-size {

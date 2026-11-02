@@ -2,7 +2,7 @@
   "uuid": "voxtype-osd@theoodawara",
   "name": "Voxtype OSD",
   "description": "Recording indicator, on-screen waveform, panel menu and settings for the voxtype speech-to-text daemon.",
-  "shell-version": ["50", "51"],
+  "shell-version": ["51"],
   "settings-schema": "org.gnome.shell.extensions.voxtype-osd",
   "version": 1
 }

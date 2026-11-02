@@ -1,5 +1,7 @@
 // Pure helpers for the accent color setting. No GI imports so the unit tests can load this.
 
+import { clampToUnit } from './levels.js';
+
 export const DEFAULT_ACCENT_COLOR = '#c0bfbc';
 
 // The dot shown while the microphone is live. Always red, whatever the accent, so it reads as recording.
@@ -27,7 +29,7 @@ export function accentColor(value: string): string {
 
 export function rgbToHex(red: number, green: number, blue: number): string {
     return `#${[red, green, blue].map(channel => {
-        const byte = Math.round(Math.min(Math.max(channel, 0), 1) * 255);
+        const byte = Math.round(clampToUnit(channel) * 255);
         return byte.toString(16).padStart(2, '0');
     }).join('')}`;
 }

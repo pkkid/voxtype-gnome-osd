@@ -6,7 +6,7 @@ import Gtk from 'gi://Gtk';
 import { firstLine, run } from '../voxtype.js';
 import { claudeCleanupCommand, cleanupCommand, cleanupModel, cleanupPrompt, OllamaModel, parseOllamaList, withCleanupPrompt } from './models.js';
 import { isUsableShortcut } from './shortcut.js';
-import { restartIfRunning } from './voxtypeConfig.js';
+import { loadSchema, restartIfRunning } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 const CLEANUP_COMMAND_KEY = 'output.post_process.command';
@@ -30,21 +30,20 @@ export function buildCleanupPage(window: Adw.PreferencesWindow, settings: Gio.Se
 }
 
 async function fillCleanupPage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage, settings: Gio.Settings, extensionPath: string): Promise<void> {
-    const [schemaResult, ollamaResult] = await Promise.all([
-        run(['voxtype', 'config', 'schema', '--json']),
+    const [schema, ollamaResult] = await Promise.all([
+        loadSchema(),
         run(['ollama', 'list']),
     ]);
 
-    if (!schemaResult.ok) {
+    if (typeof schema === 'string') {
         page.add(new Adw.PreferencesGroup({
             title: 'Cleanup unavailable',
-            description: `Could not ask voxtype about its settings: ${firstLine(schemaResult.stderr)}`,
+            description: `Could not ask voxtype about its settings: ${schema}`,
         }));
         return;
     }
 
-    const { keys } = JSON.parse(schemaResult.stdout) as { keys: { key: string; value: unknown }[] };
-    const configured = keys.find(entry => entry.key === CLEANUP_COMMAND_KEY)?.value;
+    const configured = schema.keys.find(entry => entry.key === CLEANUP_COMMAND_KEY)?.value;
 
     const models = ollamaResult.ok ? parseOllamaList(ollamaResult.stdout) : [];
     const { group, useClaudeIfEmpty } = buildCleanupGroup(window, settings, models, String(configured ?? ''), extensionPath);

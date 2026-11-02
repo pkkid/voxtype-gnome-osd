@@ -19,11 +19,6 @@ export function restartService(): Promise<CommandResult> {
     return attempt(() => callManager('RestartUnit', new GLib.Variant('(ss)', [SERVICE, 'replace'])));
 }
 
-// Same meaning as `systemctl --user daemon-reload`.
-export function reloadUnits(): Promise<CommandResult> {
-    return attempt(() => callManager('Reload', null));
-}
-
 // Same meaning as `systemctl --user enable|disable`, including the daemon reload it does afterwards.
 export function setServiceEnabled(enabled: boolean): Promise<CommandResult> {
     return attempt(async () => {

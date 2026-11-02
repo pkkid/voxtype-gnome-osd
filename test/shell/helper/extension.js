@@ -34,7 +34,12 @@ const INTERFACE = `
     <method name="PressKeys"><arg type="s" direction="in" name="keys"/></method>
     <method name="SetClipboard"><arg type="s" direction="in" name="text"/></method>
     <method name="SaveClipboard"><arg type="s" direction="in" name="path"/></method>
+    <method name="SaveClipboardBytes"><arg type="s" direction="in" name="type"/><arg type="s" direction="in" name="path"/></method>
+    <method name="HoldKey"><arg type="s" direction="in" name="key"/></method>
+    <method name="ReleaseKey"><arg type="s" direction="in" name="key"/></method>
+    <method name="BlockPanelRole"><arg type="b" direction="in" name="blocked"/></method>
     <method name="SetExtensionEnabled"><arg type="b" direction="in" name="enabled"/></method>
+    <method name="ReloadExtension"/>
     <method name="Screenshot">
       <arg type="s" direction="in" name="path"/>
       <arg type="i" direction="in" name="x"/><arg type="i" direction="in" name="y"/>
@@ -143,7 +148,8 @@ class FakeSystemd {
 }
 
 function indicator() {
-    return Main.panel.statusArea[UUID] ?? null;
+    const button = Main.panel.statusArea[UUID];
+    return button?.menu === undefined ? null : button;
 }
 
 // The indicator pill is added as top chrome, so it sits somewhere under uiGroup.
@@ -315,6 +321,31 @@ export default class TestHelper extends Extension {
         St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (_clipboard, text) => GLib.file_set_contents(path, text ?? ''));
     }
 
+    // Answers once the file is written: an app takes a moment to hand over what it owns.
+    SaveClipboardBytesAsync([type, path], invocation) {
+        St.Clipboard.get_default().get_content(St.ClipboardType.CLIPBOARD, type, (_clipboard, bytes) => {
+            GLib.file_set_contents(path, bytes instanceof GLib.Bytes ? bytes.toArray() : bytes ?? new Uint8Array());
+            invocation.return_value(null);
+        });
+    }
+
+    HoldKey(key) {
+        this._press(Clutter[`KEY_${key}`]);
+    }
+
+    ReleaseKey(key) {
+        this._release(Clutter[`KEY_${key}`]);
+    }
+
+    // With the panel's slot for the extension taken, addToStatusArea() throws partway through enable().
+    BlockPanelRole(blocked) {
+        if (blocked) {
+            Main.panel.statusArea[UUID] = {};
+        } else {
+            delete Main.panel.statusArea[UUID];
+        }
+    }
+
     _keyboard() {
         this._virtualKeyboard ??= global.stage.get_context().get_backend().get_default_seat().create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         return this._virtualKeyboard;
@@ -396,6 +427,11 @@ export default class TestHelper extends Extension {
         } else {
             Main.extensionManager.disableExtension(UUID);
         }
+    }
+
+    // The only way out of the ERROR state.
+    ReloadExtension() {
+        Main.extensionManager.reloadExtension(Main.extensionManager.lookup(UUID));
     }
 
     ScreenshotAsync([path, x, y, width, height], invocation) {

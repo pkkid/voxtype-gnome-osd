@@ -6,17 +6,11 @@ import Gtk from 'gi://Gtk';
 import { run } from '../voxtype.js';
 import { choiceModel } from './choices.js';
 import { hotkeyKeycode, hotkeyKeyName, hotkeyLabel, modifierName, readModifiers, writeModifiers } from './hotkey.js';
-import { restartIfRunning, setConfig } from './voxtypeConfig.js';
+import { loadSchema, restartIfRunning, setConfig } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 // The dictation shortcut is voxtype's own hotkey, because only voxtype sees both the press and the
-// release that push-to-talk needs. Older versions of this extension saved a GNOME custom shortcut
-// running `voxtype record toggle` instead; left in place on the same keys, it stops every recording
-// the hotkey starts, so the Settings window offers to remove it.
-const MEDIA_KEYS_SCHEMA = 'org.gnome.settings-daemon.plugins.media-keys';
-const CUSTOM_KEYBINDING_SCHEMA = `${MEDIA_KEYS_SCHEMA}.custom-keybinding`;
-const TOGGLE_COMMAND = 'voxtype record toggle';
-
+// release that push-to-talk needs.
 const INPUT_DEVICE = '/dev/input/event0';
 
 const MODE_SUBTITLE = 'Push to talk records while the keys are held. Toggle starts and stops on separate presses.';
@@ -32,11 +26,6 @@ const MASK_MODIFIERS: [Gdk.ModifierType, string, string][] = [
 ];
 
 type CapturedHotkey = { key: string; modifiers: string[] };
-
-type HotkeySchema = {
-    config_path: string;
-    keys: { key: string; value: string | number | boolean | null; choices?: string[] }[];
-};
 
 // Shown once voxtype has described its hotkey, so the window opens straight away. Stays hidden if
 // voxtype cannot answer; the Voxtype page explains why.
@@ -55,12 +44,11 @@ export function buildShortcutGroup(window: Adw.PreferencesWindow): Adw.Preferenc
 }
 
 async function fillShortcutGroup(window: Adw.PreferencesWindow, group: Adw.PreferencesGroup): Promise<void> {
-    const result = await run(['voxtype', 'config', 'schema', '--json']);
-    if (!result.ok) {
+    const schema = await loadSchema();
+    if (typeof schema === 'string') {
         return;
     }
 
-    const schema = JSON.parse(result.stdout) as HotkeySchema;
     const entries = new Map(schema.keys.map(entry => [entry.key, entry]));
     const keyEntry = entries.get('hotkey.key');
     if (keyEntry === undefined) {
@@ -157,21 +145,6 @@ async function fillShortcutGroup(window: Adw.PreferencesWindow, group: Adw.Prefe
         group.add(modeRow);
     }
 
-    const legacy = findToggleBindings();
-    if (legacy.length > 0) {
-        const legacyRow = new Adw.ActionRow({
-            title: 'Old GNOME shortcut found',
-            subtitle: `${legacy[0].get_string('binding')} also runs "${TOGGLE_COMMAND}". On the same keys it stops dictation as soon as it starts.`,
-        });
-        const removeButton = new Gtk.Button({ label: 'Remove', valign: Gtk.Align.CENTER, css_classes: ['destructive-action'] });
-        removeButton.connect('clicked', () => {
-            removeToggleBindings();
-            group.remove(legacyRow);
-        });
-        legacyRow.add_suffix(removeButton);
-        group.add(legacyRow);
-    }
-
     group.visible = true;
 }
 
@@ -241,26 +214,6 @@ function hotkeyAccelerator(key: string, modifiers: string[]): string {
         mask |= flag;
     }
     return Gtk.accelerator_name(keyval, mask);
-}
-
-function findToggleBindings(): Gio.Settings[] {
-    const paths = new Gio.Settings({ schema_id: MEDIA_KEYS_SCHEMA }).get_strv('custom-keybindings');
-    return paths
-        .map(path => new Gio.Settings({ schema_id: CUSTOM_KEYBINDING_SCHEMA, path }))
-        .filter(binding => binding.get_string('command').trim() === TOGGLE_COMMAND && binding.get_string('binding') !== '');
-}
-
-function removeToggleBindings(): void {
-    const mediaKeys = new Gio.Settings({ schema_id: MEDIA_KEYS_SCHEMA });
-    const removed = findToggleBindings();
-    const removedPaths = removed.map(binding => binding.path);
-
-    mediaKeys.set_strv('custom-keybindings', mediaKeys.get_strv('custom-keybindings').filter(path => !removedPaths.includes(path)));
-    for (const binding of removed) {
-        for (const name of ['name', 'command', 'binding']) {
-            binding.reset(name);
-        }
-    }
 }
 
 export function isUsableShortcut(keyval: number, mask: Gdk.ModifierType): boolean {

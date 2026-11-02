@@ -7,7 +7,6 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import { DaemonState, isRecording, isTranscribing } from './daemonState.js';
 
-const STATE_STYLE_CLASSES = ['voxtype-indicator-recording', 'voxtype-indicator-transcribing'];
 const STOPPED_ICON_OPACITY = 115;
 
 const STATUS_LABELS: Record<DaemonState, string> = {
@@ -50,7 +49,7 @@ export const PanelIndicator = GObject.registerClass(
             this.leftClickToggles = false;
             this.accentColor = null;
 
-            this.icon = new St.Icon({ style_class: 'system-status-icon voxtype-indicator' });
+            this.icon = new St.Icon({ style_class: 'system-status-icon' });
             this.add_child(this.icon);
 
             this.buildMenu();
@@ -81,17 +80,8 @@ export const PanelIndicator = GObject.registerClass(
             this.state = state;
             this.pendingServiceState = null;
 
-            for (const styleClass of STATE_STYLE_CLASSES) {
-                this.icon.remove_style_class_name(styleClass);
-            }
-
             const running = state !== 'unavailable';
             this.icon.opacity = running ? 255 : STOPPED_ICON_OPACITY;
-            if (isRecording(state)) {
-                this.icon.add_style_class_name('voxtype-indicator-recording');
-            } else if (isTranscribing(state)) {
-                this.icon.add_style_class_name('voxtype-indicator-transcribing');
-            }
             this.syncAccentColor();
 
             this.syncVisibility();
@@ -118,7 +108,6 @@ export const PanelIndicator = GObject.registerClass(
             return this.state !== 'unavailable' && this.state !== 'finishing';
         }
 
-        // The stylesheet's color is only a fallback; an inline style wins over it.
         private syncAccentColor() {
             const busy = isRecording(this.state) || isTranscribing(this.state);
             this.icon.set_style(busy && this.accentColor !== null ? `color: ${this.accentColor};` : null);

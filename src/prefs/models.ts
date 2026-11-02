@@ -103,12 +103,6 @@ const MODEL_WORDS: Record<string, string> = {
     zh: 'Chinese',
 };
 
-export function installedModels(catalog: ModelCatalog): InstalledModel[] {
-    return Object.entries(catalog.engines).flatMap(([engine, { models }]) => models
-        .filter(model => model.installed)
-        .map(model => ({ engine, name: model.name, downloadArg: model.download_arg })));
-}
-
 // Models voxtype.io describes, in its order, then anything else that is downloaded.
 export function dictationModels(catalog: ModelCatalog): DictationModel[] {
     const models = Object.entries(catalog.engines).flatMap(([engine, { models: listed }]) => listed.map(model => ({

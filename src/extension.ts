@@ -11,7 +11,7 @@ import { AudioSample, MicCloseDetector } from './levels.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
 import { setServiceRunning } from './systemd.js';
-import { CommandResult, toggleRecording } from './voxtype.js';
+import { toggleRecording } from './voxtype.js';
 
 const PANEL_POSITION = 0;
 // Loading the model can take a few seconds; give up on "Starting…" after this.
@@ -19,7 +19,6 @@ const SERVICE_CHANGE_TIMEOUT_SECS = 30;
 
 export default class VoxtypeOsdExtension extends Extension {
     private settings: Gio.Settings | null = null;
-    private settingsIds: number[] = [];
     private watcher: DaemonStateWatcher | null = null;
     private indicator: InstanceType<typeof PanelIndicator> | null = null;
     private pill: OsdPill | null = null;
@@ -30,13 +29,23 @@ export default class VoxtypeOsdExtension extends Extension {
     private serviceTimeoutId = 0;
 
     enable() {
+        // The shell does not call disable() after a failed enable(), and would leave the rest up.
+        try {
+            this.start();
+        } catch (error) {
+            this.disable();
+            throw error;
+        }
+    }
+
+    private start() {
         this.settings = this.getSettings();
         this.pill = new OsdPill(this.settings);
 
         this.indicator = new PanelIndicator();
         this.indicator.setIconFile(`${this.path}/icons/hicolor/scalable/actions/voxtype-panel-symbolic.svg`);
         this.indicator.setHandlers({
-            toggleRecording: () => this.report(toggleRecording(), 'could not toggle recording'),
+            toggleRecording: () => this.toggle(),
             setServiceRunning: running => this.changeService(running),
             moveIndicator: () => this.pill?.startPositioning(),
             openSettings: () => this.openPreferences(),
@@ -45,13 +54,13 @@ export default class VoxtypeOsdExtension extends Extension {
 
         this.bridge = new AudioBridge(sample => this.onSample(sample));
 
-        this.settingsIds = [
-            this.settings.connect('changed::left-click-toggles', () => this.applySettings()),
-            this.settings.connect('changed::show-when-stopped', () => this.applySettings()),
-            this.settings.connect('changed::accent-color', () => this.applySettings()),
-            this.settings.connect('changed::show-pill', () => this.applyState(this.state)),
-            this.settings.connect('changed::show-waveform', () => this.applyState(this.state)),
-        ];
+        this.settings.connectObject(
+            'changed::left-click-toggles', () => this.applySettings(),
+            'changed::show-when-stopped', () => this.applySettings(),
+            'changed::accent-color', () => this.applySettings(),
+            'changed::show-pill', () => this.applyState(this.state),
+            'changed::show-waveform', () => this.applyState(this.state),
+            this);
         this.applySettings();
 
         this.watcher = new DaemonStateWatcher(state => this.applyState(state));
@@ -66,10 +75,7 @@ export default class VoxtypeOsdExtension extends Extension {
         this.cleanup?.destroy();
         this.cleanup = null;
 
-        for (const id of this.settingsIds) {
-            this.settings?.disconnect(id);
-        }
-        this.settingsIds = [];
+        this.settings?.disconnectObject(this);
 
         this.watcher?.stop();
         this.watcher = null;
@@ -84,6 +90,7 @@ export default class VoxtypeOsdExtension extends Extension {
         this.indicator = null;
 
         this.settings = null;
+        this.state = 'unavailable';
     }
 
     private applySettings() {
@@ -148,10 +155,10 @@ export default class VoxtypeOsdExtension extends Extension {
         }
     }
 
-    private report(command: Promise<CommandResult>, what: string) {
-        command.then(result => {
+    private toggle() {
+        toggleRecording().then(result => {
             if (!result.ok) {
-                log(`voxtype-osd: ${what}: ${result.stderr.trim()}`);
+                log(`voxtype-osd: could not toggle recording: ${result.stderr.trim()}`);
             }
         });
     }

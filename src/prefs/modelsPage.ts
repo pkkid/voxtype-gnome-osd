@@ -5,7 +5,6 @@ import Gtk from 'gi://Gtk';
 
 import { firstLine, run } from '../voxtype.js';
 import { RunningCommand, runWithLines } from './download.js';
-import { hasGpuDropIn, removeGpuDropIn } from './gpu.js';
 import { buildRunsGroup } from './memory.js';
 import {
     Builds,
@@ -29,7 +28,7 @@ import {
 } from './models.js';
 import { refreshSchemaPages } from './schemaPage.js';
 import { deletePath, pathSize } from './storage.js';
-import { restartIfRunning, setConfig } from './voxtypeConfig.js';
+import { loadSchema, restartIfRunning, SchemaKey, setConfig } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 const PROGRESS_WIDTH = 120;
@@ -39,14 +38,6 @@ const DOWNLOAD_ENTRY_HEIGHT = 74;
 const GPU_CHECK_DELAY_SECS = 4;
 const USE_GPU_KEY = 'use-gpu';
 const LIVE_ALTERNATIVES: Record<string, string> = { parakeet: 'Parakeet Unified' };
-
-type SchemaKey = {
-    key: string;
-    label: string;
-    description: string;
-    value: string | number | boolean | null;
-    compiled: boolean;
-};
 
 // Only one download runs at a time, because a finished one rebuilds the page around it.
 type PageState = {
@@ -119,8 +110,8 @@ function refreshOnceLoaded(state: PageState): void {
 async function fillModelsPage(state: PageState): Promise<void> {
     state.fills += 1;
     const fill = state.fills;
-    const [schemaResult, catalogResult, catalogText, variantsResult, accelResult] = await Promise.all([
-        run(['voxtype', 'config', 'schema', '--json']),
+    const [schema, catalogResult, catalogText, variantsResult, accelResult] = await Promise.all([
+        loadSchema(),
         run(['voxtype', 'info', 'models', '--json']),
         run(['voxtype', 'info', 'models']),
         run(['voxtype', 'info', 'variants', '--json']),
@@ -139,15 +130,14 @@ async function fillModelsPage(state: PageState): Promise<void> {
         state.page.add(group);
     };
 
-    if (!schemaResult.ok || !catalogResult.ok) {
+    if (typeof schema === 'string' || !catalogResult.ok) {
         add(new Adw.PreferencesGroup({
             title: 'Models unavailable',
-            description: `Could not ask voxtype about its models: ${firstLine(schemaResult.stderr || catalogResult.stderr)}`,
+            description: `Could not ask voxtype about its models: ${typeof schema === 'string' ? schema : firstLine(catalogResult.stderr)}`,
         }));
         return;
     }
 
-    const schema = JSON.parse(schemaResult.stdout) as { keys: SchemaKey[] };
     const keys = new Map(schema.keys.map(entry => [entry.key, entry]));
     const models = dictationModels(JSON.parse(catalogResult.stdout) as ModelCatalog);
     const activeEngine = keys.get('engine')?.value ?? null;
@@ -192,7 +182,7 @@ function buildGpuRow(facts: Facts, accelJson: string): Adw.SwitchRow | null {
     }
 
     const capable = gpuCapable({ engine: String(activeEngine) }, builds);
-    const on = builds.onGpu || (builds.family === 'whisper' && hasGpuDropIn());
+    const on = builds.onGpu;
     if (capable) {
         state.settings.set_boolean(USE_GPU_KEY, on);
     }
@@ -237,7 +227,6 @@ function buildGpuRow(facts: Facts, accelJson: string): Adw.SwitchRow | null {
         }
 
         state.settings.set_boolean(USE_GPU_KEY, enable);
-        await removeGpuDropIn();
         await restartIfRunning(state.window);
         refreshOnceLoaded(state);
     });
@@ -440,7 +429,6 @@ async function switchModel(facts: Facts, model: DictationModel): Promise<boolean
             }
             return false;
         }
-        await removeGpuDropIn();
     }
 
     const result = await run(['voxtype', 'setup', 'model', '--set', model.downloadArg]);

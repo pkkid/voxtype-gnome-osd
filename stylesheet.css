@@ -115,10 +115,3 @@
 .voxtype-pill-osd .voxtype-waveform {
     height: 18px;
 }
-
-/* ───── Panel icon. The accent color setting overrides these with an inline style. ───── */
-
-.voxtype-indicator-recording,
-.voxtype-indicator-transcribing {
-    color: #c0bfbc;
-}

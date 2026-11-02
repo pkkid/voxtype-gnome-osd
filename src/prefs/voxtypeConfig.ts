@@ -3,12 +3,55 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
 import { isServiceActive, restartService } from '../systemd.js';
-import { firstLine, run } from '../voxtype.js';
+import { CommandResult, firstLine, run } from '../voxtype.js';
 import { setRestartNotice, showToast } from './window.js';
 
 const SYSTEM_CONFIG = '/etc/voxtype/config.toml';
 const MAX_RECORDING_KEY = 'audio.max_duration_secs';
 const MAX_RECORDING_SECS = '300';
+
+export type SchemaValue = string | number | boolean | null;
+
+export type SchemaKey = {
+    key: string;
+    label: string;
+    description: string;
+    type: 'bool' | 'string' | 'int' | 'float' | 'enum' | 'dynamic_enum';
+    value: SchemaValue;
+    choices?: string[];
+    min?: number;
+    max?: number;
+    source?: string;
+    engine?: string | null;
+    compiled: boolean;
+    restart_required: boolean;
+};
+
+export type VoxtypeSchema = {
+    config_path: string;
+    keys: SchemaKey[];
+};
+
+let schemaRequest: Promise<CommandResult> | null = null;
+
+// Every page asks as the window opens, so one running request serves them all. Each caller still gets
+// its own copy to change. Returns why not on failure, as a string.
+export async function loadSchema(): Promise<VoxtypeSchema | string> {
+    schemaRequest ??= run(['voxtype', 'config', 'schema', '--json']).finally(() => {
+        schemaRequest = null;
+    });
+
+    const result = await schemaRequest;
+    if (!result.ok) {
+        return firstLine(result.stderr);
+    }
+
+    try {
+        return JSON.parse(result.stdout) as VoxtypeSchema;
+    } catch (error) {
+        return String(error);
+    }
+}
 
 // Until the user has a config of their own voxtype reads the system one, which it cannot save to, so
 // every change would fail. Starting from a copy means the same settings, and voxtype keeps the comments.

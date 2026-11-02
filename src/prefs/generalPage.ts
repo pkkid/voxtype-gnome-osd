@@ -4,9 +4,9 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import { isServiceActive, isServiceEnabled, setServiceEnabled, setServiceRunning } from '../systemd.js';
-import { firstLine, run } from '../voxtype.js';
+import { firstLine } from '../voxtype.js';
 import { buildShortcutGroup } from './shortcut.js';
-import { noteRestartNeeded } from './voxtypeConfig.js';
+import { loadSchema, noteRestartNeeded } from './voxtypeConfig.js';
 import { setRestartNotice, showToast } from './window.js';
 
 const SERVICE_POLL_SECS = 2;
@@ -98,13 +98,13 @@ function buildAdvancedRow(window: Adw.PreferencesWindow): Adw.ActionRow {
     });
     row.add_suffix(new Gtk.Image({ icon_name: 'document-edit-symbolic' }));
     row.connect('activated', async () => {
-        const result = await run(['voxtype', 'config', 'schema', '--json']);
-        if (!result.ok) {
-            showToast(window, `Could not find the config file: ${firstLine(result.stderr)}`);
+        const schema = await loadSchema();
+        if (typeof schema === 'string') {
+            showToast(window, `Could not find the config file: ${schema}`);
             return;
         }
 
-        const configPath = (JSON.parse(result.stdout) as { config_path: string }).config_path;
+        const configPath = schema.config_path;
         try {
             Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(configPath, null), null);
             await noteRestartNeeded(window);
