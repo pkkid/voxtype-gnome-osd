@@ -7,6 +7,7 @@ import { AudioBridge } from './audioBridge.js';
 import { CleanupAnything } from './cleanupAnything.js';
 import { accentColor } from './color.js';
 import { DaemonState, DaemonStateWatcher, isRecording } from './daemonState.js';
+import { AudioSample, MicCloseDetector } from './levels.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
 import { setServiceRunning } from './systemd.js';
@@ -25,6 +26,7 @@ export default class VoxtypeOsdExtension extends Extension {
     private bridge: AudioBridge | null = null;
     private cleanup: CleanupAnything | null = null;
     private state: DaemonState = 'unavailable';
+    private micClose = new MicCloseDetector();
     private serviceTimeoutId = 0;
 
     enable() {
@@ -41,7 +43,7 @@ export default class VoxtypeOsdExtension extends Extension {
         });
         Main.panel.addToStatusArea(this.uuid, this.indicator, PANEL_POSITION, 'right');
 
-        this.bridge = new AudioBridge(sample => this.pill?.pushSample(sample));
+        this.bridge = new AudioBridge(sample => this.onSample(sample));
 
         this.settingsIds = [
             this.settings.connect('changed::left-click-toggles', () => this.applySettings()),
@@ -98,14 +100,27 @@ export default class VoxtypeOsdExtension extends Extension {
         if (state !== this.state) {
             this.clearServiceTimeout();
         }
+        if (state === 'streaming' && this.state !== 'streaming') {
+            this.micClose = new MicCloseDetector();
+        }
         this.state = state;
         this.indicator?.setState(state);
         this.pill?.setState(state);
 
-        if (isRecording(state) && this.pill?.showsWaveform) {
+        // Live dictation always needs the levels: they are how the mic closing is noticed.
+        if (state === 'streaming' || (isRecording(state) && this.pill?.showsWaveform)) {
             this.bridge?.start();
         } else {
             this.bridge?.stop();
+        }
+    }
+
+    private onSample(sample: AudioSample) {
+        this.pill?.pushSample(sample);
+
+        const nowMs = GLib.get_monotonic_time() / 1000;
+        if (this.state === 'streaming' && this.micClose.feed(sample.peak, nowMs)) {
+            this.applyState('finishing');
         }
     }
 

@@ -3,7 +3,7 @@ import GLib from 'gi://GLib';
 
 import { DaemonState, parseStateFile } from './states.js';
 
-export { DaemonState, isRecording } from './states.js';
+export { DaemonState, isRecording, isTranscribing } from './states.js';
 
 function stateFilePath(): string {
     return GLib.build_filenamev([GLib.get_user_runtime_dir(), 'voxtype', 'state']);

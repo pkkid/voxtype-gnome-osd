@@ -12,9 +12,16 @@ import {
     DEFAULT_CLEANUP_PROMPT,
     dictationModels,
     formatBytes,
-    gpuAvailable,
+    buildSwitchCommands,
+    gpuCapable,
+    liveCapable,
+    parseBuilds,
+    switchSummary,
     gpuLabel,
     gpuMemory,
+    modelLocation,
+    modelPlace,
+    onGpuBuild,
     installedModels,
     isActiveModel,
     modelDisplayName,
@@ -53,8 +60,8 @@ test('isActiveModel accepts either name, because engines differ in which the con
     assert.equal(isActiveModel(model, null), false);
 });
 
-test('modelFileNames covers the whisper file and directory forms', () => {
-    assert.deepEqual(modelFileNames({ engine: 'whisper', name: 'base.en', downloadArg: 'base.en' }), ['ggml-base.en.bin', 'base.en', 'base.en']);
+test('modelFileNames gives a ggml file for whisper and a directory for the rest', () => {
+    assert.deepEqual(modelFileNames({ engine: 'whisper', name: 'base.en', downloadArg: 'base.en' }), ['ggml-base.en.bin']);
 });
 
 test('parseModelsDir reads the catalog header, and gives up on anything else', () => {
@@ -170,6 +177,17 @@ test('dictationModels follows voxtype.io, keeps other downloads and drops the re
     assert.equal(models[3].note, null);
 });
 
+test('dictationModels offers every Parakeet model and says which one live dictation needs', () => {
+    const names = ['parakeet-tdt-0.6b-v2', 'parakeet-tdt-0.6b-v2-int8', 'parakeet-tdt-0.6b-v3', 'parakeet-tdt-0.6b-v3-int8', 'parakeet-unified-en-0.6b'];
+    const models = dictationModels({
+        engines: { parakeet: { models: names.map(name => ({ name, download_arg: name, installed: false })) } },
+    });
+
+    assert.equal(models.length, names.length);
+    assert.ok(models.every(model => model.note?.details));
+    assert.deepEqual(models.filter(model => liveCapable(model, true)).map(model => model.name), ['parakeet-unified-en-0.6b']);
+});
+
 test('parseDownloadEvent reads the JSON progress events and skips anything else', () => {
     assert.deepEqual(parseDownloadEvent('{"event":"progress","model":"tiny.en","file":"ggml-tiny.en.bin","bytes":1,"total":4,"pct":25.0}'), { kind: 'progress', fraction: 0.25, file: 'ggml-tiny.en.bin' });
     assert.deepEqual(parseDownloadEvent('{"event":"done","model":"tiny.en"}'), { kind: 'done' });
@@ -177,13 +195,72 @@ test('parseDownloadEvent reads the JSON progress events and skips anything else'
     assert.equal(parseDownloadEvent('Error: nope'), null);
 });
 
-test('gpuAvailable needs the Vulkan build installed, runnable, and a GPU to use', () => {
-    const variants = (fields: object) => JSON.stringify({ variants: [{ variant: 'whisper-vulkan', installed: true, runs_on_this_cpu: true, gpu_available: true, ...fields }] });
+const VARIANTS = {
+    install_kind: 'package',
+    binary_path: '/usr/lib/voxtype/voxtype-avx2',
+    package_lib_dir: '/usr/lib/voxtype',
+    variants: [
+        { variant: 'whisper-avx2', binary_name: 'voxtype-avx2', installed: true, runs_on_this_cpu: true, gpu_available: true },
+        { variant: 'whisper-vulkan', binary_name: 'voxtype-vulkan', installed: true, runs_on_this_cpu: true, gpu_available: true },
+        { variant: 'onnx-avx2', binary_name: 'voxtype-onnx-avx2', installed: true, runs_on_this_cpu: true, gpu_available: true },
+        { variant: 'onnx-cuda13', binary_name: 'voxtype-onnx-cuda-13', installed: true, runs_on_this_cpu: false, gpu_available: true },
+    ],
+};
+const builds = (fields: object = {}) => parseBuilds(JSON.stringify({ ...VARIANTS, ...fields }));
 
-    assert.equal(gpuAvailable(variants({})), true);
-    assert.equal(gpuAvailable(variants({ installed: false })), false);
-    assert.equal(gpuAvailable(variants({ gpu_available: false })), false);
-    assert.equal(gpuAvailable('not json'), false);
+test('parseBuilds reads what runs next and what this machine can run', () => {
+    assert.deepEqual(builds(), {
+        canSwitch: true,
+        family: 'whisper',
+        onGpu: false,
+        whisperGpu: true,
+        onnxGpu: false,
+        onnxBinary: '/usr/lib/voxtype/voxtype-onnx-avx2',
+    });
+    assert.equal(builds({ binary_path: '/usr/lib/voxtype/voxtype-vulkan' }).onGpu, true);
+    assert.equal(builds({ binary_path: '/usr/lib/voxtype/voxtype-onnx-avx2' }).family, 'onnx');
+    assert.equal(builds({ install_kind: 'source' }).canSwitch, false);
+    assert.equal(parseBuilds('not json').canSwitch, false);
+});
+
+test('gpuCapable depends on the machine, not just the model', () => {
+    const cuda = VARIANTS.variants.map(variant => ({ ...variant, runs_on_this_cpu: true }));
+
+    assert.equal(gpuCapable({ engine: 'whisper' }, builds()), true);
+    assert.equal(gpuCapable({ engine: 'parakeet' }, builds()), false);
+    assert.equal(gpuCapable({ engine: 'parakeet' }, builds({ variants: cuda })), true);
+});
+
+test('liveCapable needs a streaming setting, and the one Parakeet model that can stream', () => {
+    assert.equal(liveCapable({ engine: 'whisper', name: 'base.en' }, true), true);
+    assert.equal(liveCapable({ engine: 'parakeet', name: 'parakeet-tdt-0.6b-v3' }, true), false);
+    assert.equal(liveCapable({ engine: 'moonshine', name: 'base' }, false), false);
+});
+
+test('buildSwitchCommands matches the steps voxtype accepts', () => {
+    const onnx = builds({ binary_path: '/usr/lib/voxtype/voxtype-onnx-avx2' });
+    const withCuda = VARIANTS.variants.map(variant => ({ ...variant, runs_on_this_cpu: true }));
+
+    assert.deepEqual(buildSwitchCommands(builds(), 'whisper', true), []);
+    assert.deepEqual(buildSwitchCommands(builds(), 'onnx', true), [['setup', 'onnx', '--enable']]);
+    assert.deepEqual(buildSwitchCommands(onnx, 'whisper', true), [['setup', 'onnx', '--disable'], ['setup', 'gpu', '--enable']]);
+    assert.deepEqual(buildSwitchCommands(onnx, 'whisper', false), [['setup', 'onnx', '--disable'], ['setup', 'gpu', '--disable']]);
+    assert.deepEqual(buildSwitchCommands(builds(), 'onnx', false), [['setup', 'onnx', '--enable']]);
+    assert.deepEqual(buildSwitchCommands(builds({ variants: withCuda }), 'onnx', false), [['setup', 'onnx', '--enable'], ['setup', 'gpu', '--disable']]);
+    assert.deepEqual(buildSwitchCommands(builds({ install_kind: 'source' }), 'onnx', true), []);
+});
+
+test('switchSummary says where dictation ends up and asks nothing when nothing changes', () => {
+    const base = { changesBuild: true, onGpu: true, capable: false, useGpu: true, dropsLive: false, alternative: null };
+
+    assert.deepEqual(switchSummary({ ...base, changesBuild: false }), []);
+    assert.match(switchSummary(base)[0], /moves to your <b>CPU<\/b>/);
+    assert.match(switchSummary({ ...base, onGpu: false, capable: true })[0], /moves to your <b>GPU<\/b>/);
+    assert.match(switchSummary({ ...base, onGpu: false, capable: true, useGpu: false })[0], /stays on your CPU, because/);
+    assert.ok(switchSummary(base).some(line => line.includes('password')));
+    assert.ok(!switchSummary({ ...base, changesBuild: false, dropsLive: true }).some(line => line.includes('password')));
+    assert.match(switchSummary({ ...base, changesBuild: false, dropsLive: true, alternative: 'Parakeet Unified' })[0], /Parakeet Unified can\./);
+    assert.equal(switchSummary(base).at(-1), 'Voxtype restarts.');
 });
 
 test('gpuLabel only claims what voxtype observed', () => {
@@ -198,18 +275,41 @@ test('gpuLabel only claims what voxtype observed', () => {
 test('modelDisplayName spells out the engine, and the language for whisper', () => {
     const whisper = (name: string) => modelDisplayName({ engine: 'whisper', name, downloadArg: name });
 
-    assert.equal(whisper('small.en'), 'Whisper English - Small');
-    assert.equal(whisper('medium'), 'Whisper Multilingual - Medium');
-    assert.equal(whisper('large-v3'), 'Whisper Multilingual - Large v3');
-    assert.equal(whisper('large-v3-turbo'), 'Whisper Multilingual - Large v3 Turbo');
+    assert.equal(whisper('small.en'), 'Whisper English Small');
+    assert.equal(whisper('medium'), 'Whisper Multilingual Medium');
+    assert.equal(whisper('large-v3'), 'Whisper Multilingual Large v3');
+    assert.equal(whisper('large-v3-turbo'), 'Whisper Multilingual Large v3 Turbo');
 });
 
 test('modelDisplayName drops the engine from names that repeat it', () => {
-    assert.equal(modelDisplayName({ engine: 'moonshine', name: 'base', downloadArg: 'moonshine-base' }), 'Moonshine - Base');
-    assert.equal(modelDisplayName({ engine: 'sensevoice', name: 'small', downloadArg: 'sensevoice-small' }), 'SenseVoice - Small');
-    assert.equal(modelDisplayName({ engine: 'paraformer', name: 'paraformer-zh', downloadArg: 'paraformer-zh' }), 'Paraformer - Chinese');
-    assert.equal(modelDisplayName({ engine: 'parakeet', name: 'parakeet-tdt-0.6b-v3-int8', downloadArg: 'parakeet-tdt-0.6b-v3-int8' }), 'Parakeet - TDT 0.6b v3 int8');
-    assert.equal(modelDisplayName({ engine: 'mystery', name: 'x', downloadArg: 'x' }), 'mystery - X');
+    assert.equal(modelDisplayName({ engine: 'moonshine', name: 'base', downloadArg: 'moonshine-base' }), 'Moonshine Base');
+    assert.equal(modelDisplayName({ engine: 'sensevoice', name: 'small', downloadArg: 'sensevoice-small' }), 'SenseVoice Small');
+    assert.equal(modelDisplayName({ engine: 'paraformer', name: 'paraformer-zh', downloadArg: 'paraformer-zh' }), 'Paraformer Chinese');
+    assert.equal(modelDisplayName({ engine: 'parakeet', name: 'parakeet-tdt-0.6b-v3-int8', downloadArg: 'parakeet-tdt-0.6b-v3-int8' }), 'Parakeet TDT 0.6b v3 int8');
+    assert.equal(modelDisplayName({ engine: 'mystery', name: 'x', downloadArg: 'x' }), 'mystery X');
+});
+
+test('modelLocation says which memory holds the model, and nothing it cannot tell', () => {
+    assert.equal(modelLocation('{"state":"gpu"}'), 'gpu');
+    assert.equal(modelLocation('{"state":"cpu-only"}'), 'cpu');
+    assert.equal(modelLocation('{"state":"cpu-fallback"}'), 'cpu');
+    assert.equal(modelLocation('{"state":"unknown"}'), null);
+    assert.equal(modelLocation('{"state":"not-running"}'), null);
+    assert.equal(modelLocation(''), null);
+});
+
+test('modelPlace explains a model that has not loaded instead of saying unknown', () => {
+    assert.equal(modelPlace('gpu', false), 'GPU memory');
+    assert.equal(modelPlace('cpu', false), 'System memory');
+    assert.equal(modelPlace('gpu', true), 'GPU memory, only while dictating');
+    assert.equal(modelPlace(null, true), 'Not loaded until you dictate');
+    assert.equal(modelPlace(null, false), 'Not confirmed yet');
+});
+
+test('onGpuBuild reads the backend of the running build', () => {
+    assert.equal(onGpuBuild('{"backend":"vulkan","state":"unknown"}'), true);
+    assert.equal(onGpuBuild('{"backend":null,"state":"cpu-only"}'), false);
+    assert.equal(onGpuBuild(''), false);
 });
 
 test('gpuMemory reads the video memory out of the evidence, when there is any', () => {

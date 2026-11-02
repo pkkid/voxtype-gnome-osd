@@ -295,15 +295,64 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assertNoErrors();
     });
 
-    test('labels live dictation (streaming) as transcribing, with the mic live', async () => {
+    test('labels live dictation (streaming) as listening, with the mic live', async () => {
         writeState('streaming', { atomic: true });
-        const state = await waitFor(s => shown(s) && s.pill.label === 'Transcribing…', 'the streaming indicator');
+        const state = await waitFor(s => shown(s) && s.pill.label === 'Listening…', 'the streaming indicator');
         assert.match(state.pill.dot.style, new RegExp(RECORDING_DOT));
         await waitUntil(bridgeRunning, 'the audio bridge to start');
 
         writeState('idle', { atomic: true });
         await waitFor(hidden, 'the indicator to hide');
         await waitUntil(() => !bridgeRunning(), 'the audio bridge to stop');
+        assertNoErrors();
+    });
+
+    test('shows finishing once the mic closes, while voxtype still says streaming', async () => {
+        writeFileSync(path('bridge-mode'), 'closed');
+        writeState('streaming', { atomic: true });
+        let state = await waitFor(s => s.pill?.label === 'Finishing…', 'the finishing label');
+        assert.doesNotMatch(state.pill.dot.style, new RegExp(RECORDING_DOT));
+        assert.equal(state.indicator.dictation, null);
+        await waitUntil(() => !bridgeRunning(), 'the audio bridge to stop');
+
+        writeState('idle', { atomic: true });
+        await waitFor(hidden, 'the indicator to hide');
+
+        rmSync(path('bridge-mode'));
+        writeState('streaming', { atomic: true });
+        state = await waitFor(s => s.pill?.label === 'Listening…', 'the next session to start listening');
+        assert.match(state.pill.dot.style, new RegExp(RECORDING_DOT));
+
+        writeState('idle', { atomic: true });
+        await waitFor(hidden, 'the indicator to hide again');
+        assertNoErrors();
+    });
+
+    test('a muted mic in live dictation still counts as listening', async () => {
+        writeFileSync(path('bridge-mode'), 'muted');
+        writeState('streaming', { atomic: true });
+        await waitFor(s => s.pill?.label === 'Listening…', 'the streaming indicator');
+        await waitUntil(bridgeRunning, 'the audio bridge to start');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        assert.equal(inspect().pill.label, 'Listening…');
+
+        rmSync(path('bridge-mode'));
+        writeState('idle', { atomic: true });
+        await waitFor(hidden, 'the indicator to hide');
+        await waitUntil(() => !bridgeRunning(), 'the audio bridge to stop');
+        assertNoErrors();
+    });
+
+    test('live dictation notices the mic closing with the indicator turned off', async () => {
+        setSetting('show-pill', false);
+        writeFileSync(path('bridge-mode'), 'closed');
+        writeState('streaming', { atomic: true });
+        await waitFor(s => s.indicator.status === 'Finishing…', 'the panel menu to say finishing');
+
+        rmSync(path('bridge-mode'));
+        writeState('idle', { atomic: true });
+        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the panel menu to go back');
+        resetSetting('show-pill');
         assertNoErrors();
     });
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { equalizerHeights, LevelHistory, parseBridgeLine, rippleHeights, WAVEFORM_GAIN } from '../src/levels.js';
+import { equalizerHeights, LevelHistory, MicCloseDetector, parseBridgeLine, rippleHeights, WAVEFORM_GAIN } from '../src/levels.js';
 
 test('parseBridgeLine reads a well formed level line', () => {
     const sample = parseBridgeLine('{"peak":0.421,"rms":0.180,"vad":1,"ts_ms":1234567}');
@@ -114,4 +114,25 @@ test('rippleHeights stays between the resting and the crest height', () => {
             assert.ok(height >= 0.2 && height <= 0.5);
         }
     }
+});
+
+function feedAll(detector: MicCloseDetector, peaks: number[], gapMs: number, start = 0): boolean[] {
+    return peaks.map((peak, index) => detector.feed(peak, start + index * gapMs));
+}
+
+test('MicCloseDetector spots the slow silence voxtype sends once the mic closes', () => {
+    const results = feedAll(new MicCloseDetector(), new Array(12).fill(0), 33);
+
+    assert.equal(results.slice(0, 8).includes(true), false);
+    assert.equal(results[8], true);
+});
+
+test('MicCloseDetector does not mistake a muted mic for a closed one', () => {
+    assert.equal(feedAll(new MicCloseDetector(), new Array(300).fill(0), 10).includes(true), false);
+});
+
+test('MicCloseDetector ignores speech and short silences', () => {
+    const peaks = Array.from({ length: 200 }, (_, index) => (index % 6 === 0 ? 0.2 : 0));
+
+    assert.equal(feedAll(new MicCloseDetector(), peaks, 33).includes(true), false);
 });

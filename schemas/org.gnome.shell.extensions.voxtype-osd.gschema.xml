@@ -33,6 +33,11 @@
       <summary>Accent color of the indicators, as #rrggbb</summary>
       <description>Used for the recording indicator's waveform and Classic border, and the panel icon while dictating or transcribing.</description>
     </key>
+    <key name="use-gpu" type="b">
+      <default>true</default>
+      <summary>Use the GPU for models that can</summary>
+      <description>Remembered while a model that cannot use the GPU is selected, so going back restores it.</description>
+    </key>
     <key name="cleanup-command" type="s">
       <default>''</default>
       <summary>Last text cleanup command</summary>

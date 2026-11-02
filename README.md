@@ -8,8 +8,9 @@ panel menu to control the voxtype service, and a settings window.
 
 **Recording indicator:** an on-screen pill that follows your voice while you dictate, in one of four
 styles. A red dot on the microphone means it is live. It reads "Recording…" while recording and
-"Transcribing…" while voxtype transcribes, which with live dictation (`streaming` under the engine's
-section) is already the case while you speak. Drag it to move it; the position is remembered.
+"Transcribing…" while voxtype transcribes. With live dictation (`streaming` under the engine's section)
+it reads "Listening…" while the mic is on, then "Finishing…" until the last words are typed. Drag it to
+move it; the position is remembered.
 
 | Classic | Minimal |
 | :-: | :-: |
@@ -35,8 +36,10 @@ click opens a menu with the current status, start/stop dictation, a switch for t
 - **Indicator:** show or hide the indicator and voxtype's own display (`osd.enabled`), the indicator's
   style, the waveform, the accent color and its position.
 - **Dictation:** live transcription, delivery mode, and microphone options from voxtype's own config.
-- **Models:** dictation models with what each is best for, downloading and switching between them,
-  running them on the GPU, the memory in use, and on-demand model loading.
+- **Models:** pick a dictation model and the extension sets up what it needs. Compare, download and
+  remove models, and see which can use the GPU or do live transcription. Below that, choose whether to
+  use the GPU, see whether the model is in system or GPU memory and how much of each is in use, and
+  turn on on-demand model loading.
 - **Cleanup:** optional text cleanup through a command of your choice, for dictation and for Cleanup
   Anything. One click sets it to the bundled wrapper for Claude Code.
 - **Notifications:** which of voxtype's notifications to show.
@@ -64,6 +67,11 @@ apps.
 - **State:** watches `$XDG_RUNTIME_DIR/voxtype/state` with a `Gio.FileMonitor` and maps it to
   `idle`, `recording`, `streaming` (recording with live dictation), `transcribing` or
   `unavailable`. voxtype deletes the file when the daemon stops, which is how "stopped" is detected.
+- **Mic closing in live dictation:** after a stop voxtype closes the mic at once but keeps saying
+  `streaming` until the text is typed. It does switch `voxtype-audio-bridge` from 100 samples a second to
+  about 30 of exact silence, so that is what turns the indicator to "Finishing…". The bridge runs for
+  all of live dictation for this reason, even with the waveform off. Without the bridge the indicator
+  stays on "Listening…" until voxtype goes idle.
 - **Waveform:** while recording, launches `voxtype-audio-bridge` as a subprocess and reads one JSON line
   per sample (`{"peak": 0.42}`) from its stdout. Classic keeps the loudest peak of each 100 ms as one
   bar; the other styles follow the latest peaks and a smoothed level. Malformed lines are dropped.
@@ -81,17 +89,27 @@ apps.
   project files, the wrapper stops if a tool appears, and a reply is thrown out unless it is a light edit
   of the input. Those checks cannot judge meaning, so a small hostile edit like changing one number would
   pass. Read the result before sending it.
-- **Models:** the list comes from `voxtype info models`, the "best for" notes from voxtype.io, and sizes
-  are measured from the models folder. Downloads run `voxtype setup --download --progress-format json`,
-  and switching runs `voxtype setup model --set`, which refuses a model that is not downloaded.
-- **GPU:** the `voxtype` launcher starts the Vulkan build when `VOXTYPE_GPU=1` is set, which needs no
-  root. The switch adds that to the service in a systemd drop-in, `voxtype-osd-gpu.conf`, and deletes the
-  file to turn it off. `voxtype info accel` reports where the daemon really ended up.
+- **Models:** the list comes from `voxtype info models`, the notes from voxtype.io and voxtype's source,
+  and sizes are measured from the models folder. Downloads run `voxtype setup --download
+  --progress-format json`, through an ONNX program when a Whisper build is active, because that build
+  refuses other engines' models. Switching runs `voxtype setup model --set`, which refuses a model that
+  is not downloaded. voxtype has no remove command, so Remove deletes the model from the models folder.
+- **Builds:** voxtype is several programs and `/usr/bin/voxtype` points at one. Whisper builds run Whisper
+  models, and ONNX builds run everything else. `voxtype info variants` says what is installed and can run
+  here, and the extension switches with `pkexec voxtype setup onnx` when a model needs another build, so
+  the only choice left to the user is the model. Source installs have one program, so they only offer what
+  it was compiled with.
+- **GPU:** `pkexec voxtype setup gpu` switches between the GPU and CPU builds, and the choice is kept in
+  the `use-gpu` setting for when a model that cannot use the GPU is selected. Whisper uses Vulkan. ONNX
+  uses CUDA or MIGraphX, which voxtype only runs on a CPU with AVX-512, so without one the switch is
+  disabled for those models. `voxtype info accel` reports where the daemon really ended up.
 - **Config file:** the settings window reads voxtype's config each time it opens, so hand edits show up
   then. Without a user config voxtype falls back to `/etc/voxtype/config.toml`, which it cannot save to,
   so the window starts by copying that to `~/.config/voxtype/config.toml`.
 - **Live transcription:** voxtype runs it in toggle mode even when `hotkey.mode` is `push_to_talk`, so
-  the General page shows Toggle while it is on, without changing the saved setting.
+  the General page shows Toggle while it is on, without changing the saved setting. It needs the GPU
+  to keep up: in an 18 second test with `base.en`, typing ended 22 seconds after the stop on the CPU and
+  0.3 seconds after on the GPU. Raising `streaming.interval_secs` on the CPU made it worse, at 43 seconds.
 - **Text cleanup:** voxtype has no cleanup model of its own, only `output.post_process.command`, a shell
   command the text is piped through, so any script or LLM service works. If Ollama has models, choosing
   one fills in an `ollama run` command.

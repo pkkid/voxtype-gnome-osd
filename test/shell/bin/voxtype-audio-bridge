@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
 # Stand-in for voxtype-audio-bridge in the shell tests: speech-like peaks, about 30 a second.
 # $VOXTYPE_OSD_TEST_DIR/bridge-mode can make it misbehave: "garbage" writes junk lines between
-# good ones, "exit" quits straight away as if the bridge crashed.
+# good ones, "exit" quits straight away as if the bridge crashed, "closed" sends what voxtype sends
+# after the mic closes in live dictation, and "muted" sends what a muted mic does.
 echo "voxtype-audio-bridge" >> "$VOXTYPE_OSD_TEST_DIR/calls.log"
 MODE="$(cat "$VOXTYPE_OSD_TEST_DIR/bridge-mode" 2>/dev/null)"
 [ "$MODE" = exit ] && exit 1
+if [ "$MODE" = closed ] || [ "$MODE" = muted ]; then
+    [ "$MODE" = closed ] && gap=0.033 || gap=0.01
+    while true; do
+        printf '{"peak":0}\n' || exit 0
+        sleep "$gap"
+    done
+fi
 while true; do
     if [ "$MODE" = garbage ]; then
         printf 'not json\n{"peak":\n{"peak":"loud"}\n\n' || exit 0

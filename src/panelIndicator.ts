@@ -5,7 +5,7 @@ import St from 'gi://St';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import { DaemonState, isRecording } from './daemonState.js';
+import { DaemonState, isRecording, isTranscribing } from './daemonState.js';
 
 const STATE_STYLE_CLASSES = ['voxtype-indicator-recording', 'voxtype-indicator-transcribing'];
 const STOPPED_ICON_OPACITY = 115;
@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<DaemonState, string> = {
     idle: 'Voxtype is ready',
     recording: 'Dictating…',
     streaming: 'Dictating…',
+    finishing: 'Finishing…',
     transcribing: 'Transcribing…',
 };
 
@@ -67,7 +68,7 @@ export const PanelIndicator = GObject.registerClass(
 
         vfunc_event(event: Clutter.Event): boolean {
             const isLeftPress = event.type() === Clutter.EventType.BUTTON_PRESS && event.get_button() === Clutter.BUTTON_PRIMARY;
-            if (isLeftPress && this.leftClickToggles && this.state !== 'unavailable') {
+            if (isLeftPress && this.leftClickToggles && this.canToggle()) {
                 this.handlers?.toggleRecording();
                 return Clutter.EVENT_STOP;
             }
@@ -88,7 +89,7 @@ export const PanelIndicator = GObject.registerClass(
             this.icon.opacity = running ? 255 : STOPPED_ICON_OPACITY;
             if (isRecording(state)) {
                 this.icon.add_style_class_name('voxtype-indicator-recording');
-            } else if (state === 'transcribing') {
+            } else if (isTranscribing(state)) {
                 this.icon.add_style_class_name('voxtype-indicator-transcribing');
             }
             this.syncAccentColor();
@@ -112,9 +113,14 @@ export const PanelIndicator = GObject.registerClass(
             this.syncVisibility();
         }
 
+        // While finishing, a stop from here would make voxtype throw away the words still to come.
+        private canToggle(): boolean {
+            return this.state !== 'unavailable' && this.state !== 'finishing';
+        }
+
         // The stylesheet's color is only a fallback; an inline style wins over it.
         private syncAccentColor() {
-            const busy = isRecording(this.state) || this.state === 'transcribing';
+            const busy = isRecording(this.state) || isTranscribing(this.state);
             this.icon.set_style(busy && this.accentColor !== null ? `color: ${this.accentColor};` : null);
         }
 
@@ -172,7 +178,7 @@ export const PanelIndicator = GObject.registerClass(
             this.syncingServiceItem = true;
             this.serviceItem.setToggleState(this.pendingServiceState ?? running);
             this.syncingServiceItem = false;
-            this.dictationItem.visible = running;
+            this.dictationItem.visible = this.canToggle();
             this.dictationItem.label.text = isRecording(this.state) ? 'Stop dictation' : 'Start dictation';
         }
     },

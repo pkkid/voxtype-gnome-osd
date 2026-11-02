@@ -26,8 +26,9 @@ export type OllamaModel = {
 
 export type ModelNote = {
     bestFor: string;
+    // Why someone would pick this one, for the download list.
+    details: string;
     size: string;
-    recommended?: string;
 };
 
 export type DictationModel = InstalledModel & {
@@ -53,25 +54,33 @@ const PROMPT_FLAG = '--prompt';
 
 // From the model tables on voxtype.io, in the same order, keyed by the name `voxtype setup` takes.
 // tiny.en is listed there as 39 MB, but the file is 75 MB. omnilingual-300m is listed as
-// omnilingual-large, but voxtype's catalog does not know that name.
+// omnilingual-large, but voxtype's catalog does not know that name. voxtype.io lists one Parakeet
+// model, so the others are described from the model list in voxtype's source.
 export const MODEL_NOTES: Record<string, ModelNote> = {
-    'tiny.en': { bestFor: 'Quick notes, low-end hardware', size: '75 MB' },
-    'base.en': { bestFor: 'Most users', size: '142 MB', recommended: 'Recommended' },
-    'small.en': { bestFor: 'Higher accuracy needs', size: '466 MB' },
-    'medium.en': { bestFor: 'Professional transcription', size: '1.5 GB' },
-    'tiny': { bestFor: 'Quick notes, any language', size: '75 MB' },
-    'base': { bestFor: 'General multilingual use', size: '142 MB' },
-    'small': { bestFor: 'Better multilingual accuracy', size: '466 MB' },
-    'medium': { bestFor: 'Professional multilingual', size: '1.5 GB' },
-    'large-v3': { bestFor: 'Maximum accuracy', size: '3.1 GB' },
-    'large-v3-turbo': { bestFor: 'Fast + accurate', size: '1.6 GB', recommended: 'Recommended with a GPU' },
-    'parakeet-tdt-0.6b-v3-int8': { bestFor: 'Best English accuracy, built-in punctuation', size: '670 MB' },
-    'moonshine-base': { bestFor: 'Fastest CPU inference, English', size: '237 MB' },
-    'sensevoice-small': { bestFor: 'Chinese, Japanese, Korean, Cantonese, English', size: '239 MB' },
-    'paraformer-zh': { bestFor: 'Chinese + English bilingual', size: '487 MB' },
-    'dolphin-base': { bestFor: '40 languages + 22 Chinese dialects', size: '198 MB' },
-    'omnilingual-300m': { bestFor: '1600+ languages, rare and low-resource', size: '3.9 GB' },
+    'tiny.en': { bestFor: 'Quick notes, low-end hardware', details: 'The smallest and fastest. Good for older computers. English only.', size: '75 MB' },
+    'base.en': { bestFor: 'Most users', details: 'Quick and light. A good place to start. English only.', size: '142 MB' },
+    'small.en': { bestFor: 'Higher accuracy needs', details: 'More accurate than Base, with a much smaller download than Turbo. English only.', size: '466 MB' },
+    'medium.en': { bestFor: 'Professional transcription', details: 'More accurate than Small, and slower. English only.', size: '1.5 GB' },
+    'tiny': { bestFor: 'Quick notes, any language', details: 'The smallest and fastest. Understands many languages.', size: '75 MB' },
+    'base': { bestFor: 'General multilingual use', details: 'Quick and light. Understands many languages.', size: '142 MB' },
+    'small': { bestFor: 'Better multilingual accuracy', details: 'More accurate than Base. Understands many languages.', size: '466 MB' },
+    'medium': { bestFor: 'Professional multilingual', details: 'More accurate than Small, and slower. Understands many languages.', size: '1.5 GB' },
+    'large-v3': { bestFor: 'Maximum accuracy', details: 'The most accurate Whisper model, and the biggest. Understands many languages.', size: '3.1 GB' },
+    'large-v3-turbo': { bestFor: 'Fast + accurate', details: 'More accurate than Base, and understands many languages. Best on a GPU.', size: '1.6 GB' },
+    'parakeet-unified-en-0.6b': { bestFor: 'Types as you speak', details: 'The only Parakeet model that can do live transcription. English only.', size: '2.7 GB' },
+    'parakeet-tdt-0.6b-v3': { bestFor: 'Full size, built-in punctuation', details: 'Voxtype\'s default Parakeet model. Adds punctuation for you. English only.', size: '2.6 GB' },
+    'parakeet-tdt-0.6b-v3-int8': { bestFor: 'Smaller and faster than the full v3', details: 'The same model made smaller, with built-in punctuation. English only.', size: '670 MB' },
+    'parakeet-tdt-0.6b-v2': { bestFor: 'Best English accuracy', details: 'Voxtype lists this as its most accurate English model. English only.', size: '2.4 GB' },
+    'parakeet-tdt-0.6b-v2-int8': { bestFor: 'Smaller and faster than the full v2', details: 'The same model made smaller. English only.', size: '640 MB' },
+    'moonshine-base': { bestFor: 'Fastest CPU inference, English', details: 'Built for speed on a CPU. English only.', size: '237 MB' },
+    'sensevoice-small': { bestFor: 'Chinese, Japanese, Korean, Cantonese, English', details: 'Understands Chinese, Japanese, Korean, Cantonese and English.', size: '239 MB' },
+    'paraformer-zh': { bestFor: 'Chinese + English bilingual', details: 'Understands Chinese and English, even mixed together.', size: '487 MB' },
+    'dolphin-base': { bestFor: '40 languages + 22 Chinese dialects', details: 'Understands 40 languages and 22 Chinese dialects.', size: '198 MB' },
+    'omnilingual-300m': { bestFor: '1600+ languages, rare and low-resource', details: 'Understands over 1600 languages, including rare ones.', size: '3.9 GB' },
 };
+
+// The only Parakeet model voxtype's live transcription can load.
+export const LIVE_PARAKEET_MODEL = 'parakeet-unified-en-0.6b';
 
 const ENGINE_NAMES: Record<string, string> = {
     cohere: 'Cohere',
@@ -116,7 +125,7 @@ export function dictationModels(catalog: ModelCatalog): DictationModel[] {
     return [...described, ...models.filter(model => model.note === null && model.installed)];
 }
 
-// A readable name like "Whisper English - Small", built from names like small.en. Whisper models
+// A readable name like "Whisper English Small", built from names like small.en. Whisper models
 // come in English and multilingual versions; other engines put their own name first, as in
 // moonshine-base.
 export function modelDisplayName(model: InstalledModel): string {
@@ -124,11 +133,11 @@ export function modelDisplayName(model: InstalledModel): string {
 
     if (model.engine === 'whisper') {
         const english = model.name.endsWith('.en');
-        return `${engine} ${english ? 'English' : 'Multilingual'} - ${readableWords(model.name.replace(/\.en$/, ''))}`;
+        return `${engine} ${english ? 'English' : 'Multilingual'} ${readableWords(model.name.replace(/\.en$/, ''))}`;
     }
 
     const prefix = new RegExp(`^${model.engine}-`, 'i');
-    return `${engine} - ${readableWords(model.downloadArg.replace(prefix, ''))}`;
+    return `${engine} ${readableWords(model.downloadArg.replace(prefix, ''))}`;
 }
 
 function readableWords(name: string): string {
@@ -159,7 +168,7 @@ export function isActiveModel(model: InstalledModel, configured: unknown): boole
 
 // Where a model may live under the models folder: whisper uses a ggml file, other engines a directory.
 export function modelFileNames(model: InstalledModel): string[] {
-    return [`ggml-${model.name}.bin`, model.downloadArg, model.name];
+    return model.engine === 'whisper' ? [`ggml-${model.name}.bin`] : [model.downloadArg, model.name];
 }
 
 // `voxtype info models --json` leaves the folder out, but the text form opens with it.
@@ -184,14 +193,108 @@ function parseOllamaSize(size: string): number {
     return Number(match[1]) * 1000 ** BYTE_UNITS.indexOf(match[2].toUpperCase());
 }
 
-// Whether voxtype's Vulkan build is installed and has a GPU to use. It runs Whisper only.
-export function gpuAvailable(variantsJson: string): boolean {
+// Voxtype is several programs, and /usr/bin/voxtype points at one of them. The Whisper ones run
+// Whisper models, some on the GPU through Vulkan. The ONNX ones run everything else, some on the GPU
+// through CUDA or MIGraphX, and Whisper too, but only on the CPU.
+export type BuildFamily = 'whisper' | 'onnx';
+
+export type Builds = {
+    // Only package installs have other programs to switch to.
+    canSwitch: boolean;
+    family: BuildFamily;
+    onGpu: boolean;
+    whisperGpu: boolean;
+    onnxGpu: boolean;
+    // An ONNX program that runs here, which a Whisper one can hand work to without being switched.
+    onnxBinary: string | null;
+};
+
+type BuildVariant = { variant: string; binary_name: string; installed: boolean; runs_on_this_cpu: boolean; gpu_available: boolean };
+
+const NO_BUILDS: Builds = { canSwitch: false, family: 'whisper', onGpu: false, whisperGpu: false, onnxGpu: false, onnxBinary: null };
+
+// From `voxtype info variants --json`. binary_path is what starts next, which after a switch is
+// newer than running_variant.
+export function parseBuilds(variantsJson: string): Builds {
+    let report: { install_kind?: string; binary_path?: string; package_lib_dir?: string; variants: BuildVariant[] };
     try {
-        const { variants } = JSON.parse(variantsJson) as { variants: { variant: string; installed: boolean; runs_on_this_cpu: boolean; gpu_available: boolean }[] };
-        return variants.some(({ variant, installed, runs_on_this_cpu, gpu_available }) => variant === 'whisper-vulkan' && installed && runs_on_this_cpu && gpu_available);
+        report = JSON.parse(variantsJson) as typeof report;
     } catch {
-        return false;
+        return NO_BUILDS;
     }
+
+    const usable = report.variants.filter(({ installed, runs_on_this_cpu, gpu_available }) => installed && runs_on_this_cpu && gpu_available);
+    const onGpu = (variant: string) => /vulkan|cuda|migraphx/.test(variant);
+    const family = (variant: string): BuildFamily => variant.startsWith('onnx') ? 'onnx' : 'whisper';
+    const current = report.variants.find(({ binary_name }) => report.binary_path?.endsWith(`/${binary_name}`))?.variant ?? '';
+    const onnxCpu = usable.find(({ variant }) => family(variant) === 'onnx' && !onGpu(variant));
+
+    return {
+        canSwitch: report.install_kind === 'package',
+        family: family(current),
+        onGpu: onGpu(current),
+        whisperGpu: usable.some(({ variant }) => family(variant) === 'whisper' && onGpu(variant)),
+        onnxGpu: usable.some(({ variant }) => family(variant) === 'onnx' && onGpu(variant)),
+        onnxBinary: onnxCpu && report.package_lib_dir ? `${report.package_lib_dir}/${onnxCpu.binary_name}` : null,
+    };
+}
+
+export function modelFamily(model: { engine: string }): BuildFamily {
+    return model.engine === 'whisper' ? 'whisper' : 'onnx';
+}
+
+export function gpuCapable(model: { engine: string }, builds: Builds): boolean {
+    return modelFamily(model) === 'whisper' ? builds.whisperGpu : builds.onnxGpu;
+}
+
+// `streamingKnown` is whether voxtype has a streaming setting for the model's engine at all.
+export function liveCapable(model: { engine: string; name: string }, streamingKnown: boolean): boolean {
+    return streamingKnown && (model.engine !== 'parakeet' || model.name === LIVE_PARAKEET_MODEL);
+}
+
+// What to hand `voxtype setup` so the next start can run a model of this family. Neither step does
+// the GPU choice on its own: leaving ONNX lands on the CPU, and entering it picks the GPU if it can.
+// `setup gpu --enable` fails from ONNX on a machine with no ONNX GPU program, so it is never asked.
+export function buildSwitchCommands(builds: Builds, target: BuildFamily, useGpu: boolean): string[][] {
+    if (!builds.canSwitch || builds.family === target) {
+        return [];
+    }
+
+    if (target === 'onnx') {
+        return [['setup', 'onnx', '--enable'], ...(builds.onnxGpu && !useGpu ? [['setup', 'gpu', '--disable']] : [])];
+    }
+    return [['setup', 'onnx', '--disable'], ...(builds.whisperGpu ? [['setup', 'gpu', useGpu ? '--enable' : '--disable']] : [])];
+}
+
+type SwitchChange = {
+    changesBuild: boolean;
+    onGpu: boolean;
+    capable: boolean;
+    useGpu: boolean;
+    dropsLive: boolean;
+    alternative: string | null;
+};
+
+// The confirmation for changing models, as Pango markup. Empty when there is nothing to warn about.
+export function switchSummary({ changesBuild, onGpu, capable, useGpu, dropsLive, alternative }: SwitchChange): string[] {
+    const lines: string[] = [];
+
+    if (changesBuild) {
+        const willUseGpu = capable && useGpu;
+        if (willUseGpu) {
+            lines.push(onGpu ? 'Dictation stays on your GPU.' : 'Dictation moves to your <b>GPU</b>, because "Use your GPU" is on.');
+        } else if (onGpu) {
+            lines.push('Dictation moves to your <b>CPU</b>, because this model can\'t use your GPU on this computer. It may take longer to finish.');
+        } else {
+            lines.push(capable ? 'Dictation stays on your CPU, because "Use your GPU" is off.' : 'Dictation stays on your CPU.');
+        }
+        lines.push('Voxtype switches to the version that runs this model. <b>You\'ll be asked for your password.</b>');
+    }
+    if (dropsLive) {
+        lines.push(`<b>Live transcription turns off</b>, because this model can't do it.${alternative ? ` ${alternative} can.` : ''}`);
+    }
+
+    return lines.length > 0 ? [...lines, 'Voxtype restarts.'] : [];
 }
 
 // Where the running daemon actually ended up, from `voxtype info accel --json`.
@@ -210,6 +313,38 @@ export function gpuLabel(accelJson: string): string {
         }
     } catch {
         return '';
+    }
+}
+
+// Which memory the running daemon's model lives in, or null when voxtype cannot tell.
+export function modelLocation(accelJson: string): 'gpu' | 'cpu' | null {
+    try {
+        const { state } = JSON.parse(accelJson) as { state?: string };
+        if (state === 'gpu') {
+            return 'gpu';
+        }
+        return state === 'cpu-only' || state === 'cpu-fallback' ? 'cpu' : null;
+    } catch {
+        return null;
+    }
+}
+
+// voxtype only knows where a model went once one has loaded, so before that it reports "unknown".
+export function modelPlace(location: 'gpu' | 'cpu' | null, isOnDemand: boolean): string {
+    if (location === null) {
+        return isOnDemand ? 'Not loaded until you dictate' : 'Not confirmed yet';
+    }
+
+    const place = location === 'gpu' ? 'GPU memory' : 'System memory';
+    return isOnDemand ? `${place}, only while dictating` : place;
+}
+
+// Whether the running daemon is a GPU build, which holds until a model proves otherwise.
+export function onGpuBuild(accelJson: string): boolean {
+    try {
+        return (JSON.parse(accelJson) as { backend?: string | null }).backend != null;
+    } catch {
+        return false;
     }
 }
 

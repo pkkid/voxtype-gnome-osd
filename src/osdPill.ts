@@ -24,10 +24,11 @@ const STYLE_SIZES: Record<IndicatorStyle, [number, number]> = {
 // Minimal without its equalizer is just the dot.
 const MINIMAL_DOT_ONLY_SIZE: [number, number] = [30, 30];
 
-// With live dictation the words are typed while you speak, so that already counts as transcribing.
+// The red dot and these words have to match the mic: the first two are the only ones with it on.
 const STATE_LABELS: Partial<Record<DaemonState, string>> = {
     recording: 'Recording…',
-    streaming: 'Transcribing…',
+    streaming: 'Listening…',
+    finishing: 'Finishing…',
     transcribing: 'Transcribing…',
 };
 

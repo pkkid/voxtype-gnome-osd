@@ -44,6 +44,67 @@ const PREFS_CSS = `
 .voxtype-style-footer {
     padding: 10px 12px;
 }
+
+.voxtype-pill {
+    padding: 1px 8px;
+    border-radius: 99px;
+    border: 1px solid alpha(currentColor, 0.15);
+    color: alpha(currentColor, 0.7);
+    font-size: 0.82em;
+}
+
+.voxtype-pill-size {
+    min-width: 46px;
+}
+
+.voxtype-download-list {
+    background: none;
+}
+
+/* Adwaita tints this with the accent color while open. */
+.voxtype-download-row image.expander-row-arrow {
+    color: inherit;
+}
+
+.voxtype-download-list row {
+    transition: background-color 120ms;
+}
+
+.voxtype-download-list row:hover {
+    background-color: alpha(currentColor, 0.05);
+}
+
+.voxtype-download-text {
+    opacity: 0.7;
+    transition: opacity 120ms;
+}
+
+.voxtype-download-list row:hover .voxtype-download-text {
+    opacity: 1;
+}
+
+.voxtype-download-list .voxtype-pill {
+    padding: 0 7px;
+    font-size: 0.72em;
+}
+
+.voxtype-download-list .voxtype-pill-size {
+    min-width: 40px;
+}
+
+.voxtype-compact-title {
+    font-size: 0.9em;
+}
+
+.voxtype-compact-detail {
+    font-size: 0.8em;
+}
+
+.voxtype-compact-button {
+    font-size: 0.9em;
+    min-height: 26px;
+    padding: 2px 10px;
+}
 `;
 
 export type SidebarHeader = {

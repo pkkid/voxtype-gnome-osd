@@ -4,28 +4,24 @@ import GLib from 'gi://GLib';
 import { reloadUnits } from '../systemd.js';
 import { CommandResult } from '../voxtype.js';
 
-// `voxtype setup gpu --enable` needs root, but the launcher starts the Vulkan build for anyone who
-// sets VOXTYPE_GPU=1, so a drop-in on the user's own service is enough.
-const DROP_IN = '[Service]\nEnvironment=VOXTYPE_GPU=1\n';
-
+// Earlier versions turned the GPU on with VOXTYPE_GPU=1 in a drop-in on the user's own service, which
+// the launcher /usr/bin/voxtype obeys. `voxtype setup` replaces that launcher, so this is only read
+// until the next switch, and then cleared away.
 function dropInFile(): Gio.File {
     return Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_config_dir(), 'systemd', 'user', 'voxtype.service.d', 'voxtype-osd-gpu.conf']));
 }
 
-export function isGpuEnabled(): boolean {
+export function hasGpuDropIn(): boolean {
     return dropInFile().query_exists(null);
 }
 
-export async function setGpuEnabled(enabled: boolean): Promise<CommandResult> {
-    const file = dropInFile();
+export async function removeGpuDropIn(): Promise<CommandResult> {
+    if (!hasGpuDropIn()) {
+        return { ok: true, stdout: '', stderr: '' };
+    }
 
     try {
-        if (enabled) {
-            GLib.mkdir_with_parents(file.get_parent()!.get_path()!, 0o755);
-            file.replace_contents(new TextEncoder().encode(DROP_IN), null, false, Gio.FileCreateFlags.NONE, null);
-        } else {
-            file.delete(null);
-        }
+        dropInFile().delete(null);
     } catch (error) {
         return { ok: false, stdout: '', stderr: String(error) };
     }

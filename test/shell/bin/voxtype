@@ -7,7 +7,7 @@ case "$*" in
     "config get osd.enabled") echo true ;;
     "info models --json") cat "$FIXTURES/voxtype-models.json" ;;
     "info models") echo "Model catalog  ($VOXTYPE_OSD_TEST_DIR/models)" ;;
-    "info variants --json") echo '{"variants":[{"variant":"whisper-vulkan","installed":true,"runs_on_this_cpu":true,"gpu_available":true}]}' ;;
+    "info variants --json") echo '{"install_kind":"package","binary_path":"/usr/lib/voxtype/voxtype-avx2","package_lib_dir":"/usr/lib/voxtype","variants":[{"variant":"whisper-avx2","binary_name":"voxtype-avx2","installed":true,"runs_on_this_cpu":true,"gpu_available":true},{"variant":"whisper-vulkan","binary_name":"voxtype-vulkan","installed":true,"runs_on_this_cpu":true,"gpu_available":true},{"variant":"onnx-avx2","binary_name":"voxtype-onnx-avx2","installed":true,"runs_on_this_cpu":true,"gpu_available":true}]}' ;;
     "info accel --json") echo '{"state":"cpu-only"}' ;;
     "info devices --json") cat "$FIXTURES/voxtype-devices.json" ;;
 esac
