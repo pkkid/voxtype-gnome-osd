@@ -12,6 +12,11 @@ const HEADER_MARGIN_TOP = 18;
 const HEADER_UNDER_BAR_MARGIN_TOP = 6;
 
 const PREFS_CSS = `
+/* A scrollbar's own minimum height would otherwise stretch these past three lines. */
+.voxtype-text-area scrollbar slider {
+    min-height: 16px;
+}
+
 .voxtype-prefs-logo {
     min-width: 40px;
     min-height: 40px;

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 
-import { chooseClipboardType, configValue, DoubleTap, isTerminal, restoreOuterSpace } from '../src/cleanupRules.js';
+import { addsLink, chooseClipboardType, configValue, DoubleTap, fillPrompt, isTerminal, restoreOuterSpace } from '../src/cleanupRules.js';
 
 function fired(taps: number[]): number {
     const detector = new DoubleTap();
@@ -37,6 +38,40 @@ test('chooseClipboardType prefers text, then images, then whatever is first', ()
     assert.equal(chooseClipboardType(['application/x-thing', 'image/png']), 'image/png');
     assert.equal(chooseClipboardType(['application/x-thing']), 'application/x-thing');
     assert.equal(chooseClipboardType([]), null);
+});
+
+const AWKWARD = `don't "quote" $HOME \`id\` \\ back\nline two: $text`;
+
+test('fillPrompt keeps the prompt as one piece of text, wherever $prompt sits', () => {
+    const shell = (command: string) => spawnSync('sh', ['-c', fillPrompt(command, AWKWARD)], { encoding: 'utf8' }).stdout;
+
+    assert.equal(shell('printf %s $prompt'), AWKWARD);
+    assert.equal(shell(`printf %s '$prompt'`), AWKWARD);
+    assert.equal(shell('printf %s "$prompt"'), AWKWARD);
+    assert.equal(shell(`printf %s "Do this: $prompt!"`), `Do this: ${AWKWARD}!`);
+    assert.equal(shell(`printf %s 'Do this: $prompt!'`), `Do this: ${AWKWARD}!`);
+    assert.equal(shell('printf "%s|%s" $prompt $prompt'), `${AWKWARD}|${AWKWARD}`);
+});
+
+test('fillPrompt leaves other variables and an escaped $prompt alone', () => {
+    assert.equal(fillPrompt('echo $prompts $HOME \\$prompt', 'x'), 'echo $prompts $HOME \\$prompt');
+    assert.equal(fillPrompt('sed s/foo/bar/', 'x'), 'sed s/foo/bar/');
+    assert.equal(fillPrompt('', 'x'), '');
+});
+
+test('addsLink finds a new link or address', () => {
+    assert.equal(addsLink('please check this', 'Please check this https://evil.example'), true);
+    assert.equal(addsLink('please check this', 'Please check www.evil.example'), true);
+    assert.equal(addsLink('send it over', 'Send it to a@evil.example'), true);
+    assert.equal(addsLink('see https://b.io', 'See https://b.io/other'), true);
+});
+
+test('addsLink allows links that were there, with new punctuation or capitals, and text without any', () => {
+    assert.equal(addsLink('see https://b.io', 'See https://b.io'), false);
+    assert.equal(addsLink('see www.foo.com', 'See www.foo.com.'), false);
+    assert.equal(addsLink('see www.foo.com', 'See WWW.foo.com, please'), false);
+    assert.equal(addsLink('mail bob@foo.com', 'Mail Bob@foo.com.'), false);
+    assert.equal(addsLink('teh text', 'The text.'), false);
 });
 
 test('restoreOuterSpace keeps the space around the original and drops the space the command added', () => {

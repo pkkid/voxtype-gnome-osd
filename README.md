@@ -42,14 +42,20 @@ It selects the whole field, runs your cleanup command, pastes the result and put
 Press the trigger again to cancel. Undo depends on the app, so don't count on Ctrl+Z.
 
 - The whole field goes to whatever service your command uses.
-- Your text is left alone if the command fails, the field changes or you move to another window.
+- Your text is left alone if the command fails, the reply adds a link or email address, the field
+  changes or you move to another window.
 - Terminals are skipped, but a terminal inside another app, like VS Code's, can't be detected.
 - Rich text on your clipboard comes back as plain text.
 
-The Claude Code example runs with every tool off and rejects replies that are more than a light edit.
-It can't judge meaning, so read the result before you send it. The other commands have no such checks.
-The Codex example can't change files, but Codex can't turn its tools off, so text you clean up could
-trick it into reading files and pasting out what it finds.
+Write `$prompt` in the cleanup command where the LLM prompt should go. It is quoted for you, so it
+needs no escaping, except inside a second shell like `bash -c`, which would read it again. The
+examples already use it.
+
+The Claude Code example runs `claude -p` with every tool off. Nothing checks that a reply is really a
+cleanup, so read the result before you send it.
+The Codex example also turns its tools off, but Codex has no setting made for that. It uses feature
+switches tested on 0.166, so a later Codex could turn them back on. If so, its read-only sandbox still
+stops it changing files, but text you clean up could trick it into reading files and pasting them out.
 
 ## Requirements
 

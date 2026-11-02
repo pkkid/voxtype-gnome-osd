@@ -3,55 +3,42 @@ import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 
+import { fillPrompt } from '../cleanupRules.js';
 import { firstLine, run } from '../voxtype.js';
 import { buildSummaryLabel } from './memory.js';
-import { claudeCleanupCommand, cleanupCommand, cleanupModel, cleanupPrompt, codexCleanupCommand, OllamaModel, parseOllamaList, withCleanupPrompt } from './models.js';
+import { claudeCleanupCommand, cleanupCommand, cleanupModel, codexCleanupCommand, OllamaModel, parseOllamaList, replaceOldWrapper } from './models.js';
 import { isUsableShortcut } from './shortcut.js';
 import { loadSchema, restartIfRunning } from './voxtypeConfig.js';
 import { showToast } from './window.js';
 
 const CLEANUP_COMMAND_KEY = 'output.post_process.command';
 const SHORTCUT_KEY = 'cleanup-anything-shortcut';
-const PROMPT_LINES_HEIGHT = 88;
-const PROMPT_HINT = 'Write $text where your text goes. If you leave it out, the text goes after the prompt.';
-const NO_PROMPT_HINT = 'Only the Claude Code command takes a prompt. Other commands carry their own.';
+const TEXT_AREA_LINES = 3;
+const TEXT_AREA_MARGIN = 6;
 const TRIGGERS = [['double-ctrl', 'Double-tap Left Ctrl'], ['shortcut', 'Custom shortcut']];
 const EXAMPLE_OLLAMA_MODEL = 'llama3.2';
-const COMMAND_HINT = 'Runs after dictation, or when you use the Cleanup Hotkey below. It reads the text on stdin and prints the result.';
+const COMMAND_HINT = 'Reads text on stdin and prints the result. $prompt is replaced with the LLM prompt, quoted for you. Give the model no tools, as the text could tell it to run commands.';
 const EXAMPLE_LINKS = 'Examples: '
-    + '<a href="claude" title="Uses your installed Claude Code with every tool off. Set the model and reasoning level with --model and --effort. Needs Python 3, and Claude Code signed in.">Claude Code</a>, '
-    + '<a href="codex" title="Uses your installed Codex. It can not change files, but it can still run read-only commands, so text you clean up could trick it into pasting out what it reads.">Codex</a>, '
+    + '<a href="claude" title="Uses your installed Claude Code with every tool off. Needs Claude Code signed in.">Claude Code</a>, '
+    + '<a href="codex" title="Uses your installed Codex with its tools turned off, and a read-only sandbox in case an update turns them back on.">Codex</a>, '
     + '<a href="ollama" title="Uses a local model through Ollama. Pick one of yours in place of the model name.">Ollama</a>';
-// Matches the checks in bin/voxtype-cleanup.py and CleanupAnything.replaceField().
-const LEFT_ALONE_HELP = `Your text is left alone if:
-\u2022 it is empty, or over the Longest text limit
-\u2022 it is in a terminal
-\u2022 the command fails, times out or returns nothing
-\u2022 it changes while the command runs
-\u2022 you move to another window or cancel
-
-With the Claude Code example, a reply is also rejected if it:
-\u2022 adds lines
-\u2022 adds a link or email address
-\u2022 drops more than half of the original
-\u2022 is more than 30% new text
-
-Other commands have no such checks, so whatever they print is pasted in.`;
+// Matches the checks in CleanupAnything.replaceField().
+const REJECT_HELP = 'A reply is rejected if it is empty, or adds a link or email address.';
 
 // Fills in once voxtype has answered, so the window opens straight away.
-export function buildCleanupPage(window: Adw.PreferencesWindow, settings: Gio.Settings, extensionPath: string): Adw.PreferencesPage {
+export function buildCleanupPage(window: Adw.PreferencesWindow, settings: Gio.Settings): Adw.PreferencesPage {
     const page = new Adw.PreferencesPage({
         name: 'cleanup',
         title: 'Cleanup',
         icon_name: 'voxtype-broom-symbolic',
     });
-    fillCleanupPage(window, page, settings, extensionPath).catch(error => {
+    fillCleanupPage(window, page, settings).catch(error => {
         logError(error as Error, 'voxtype-osd: could not build the Cleanup page');
     });
     return page;
 }
 
-async function fillCleanupPage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage, settings: Gio.Settings, extensionPath: string): Promise<void> {
+async function fillCleanupPage(window: Adw.PreferencesWindow, page: Adw.PreferencesPage, settings: Gio.Settings): Promise<void> {
     const [schema, ollamaResult] = await Promise.all([
         loadSchema(),
         run(['ollama', 'list']),
@@ -68,18 +55,18 @@ async function fillCleanupPage(window: Adw.PreferencesWindow, page: Adw.Preferen
     const configured = schema.keys.find(entry => entry.key === CLEANUP_COMMAND_KEY)?.value;
 
     const models = ollamaResult.ok ? parseOllamaList(ollamaResult.stdout) : [];
-    const { group, useClaudeIfEmpty } = buildCleanupGroup(window, settings, models, String(configured ?? ''), extensionPath);
+    const { group, useClaudeIfEmpty } = buildCleanupGroup(window, settings, models, String(configured ?? ''));
     page.add(group);
     page.add(buildAnythingGroup(window, settings, useClaudeIfEmpty));
 }
 
-function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings, ollamaModels: OllamaModel[], configured: string, extensionPath: string): { group: Adw.PreferencesGroup; useClaudeIfEmpty: () => void } {
+function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings, ollamaModels: OllamaModel[], configured: string): { group: Adw.PreferencesGroup; useClaudeIfEmpty: () => void } {
     const group = new Adw.PreferencesGroup();
 
     const save = async (command: string | null): Promise<boolean> => {
         const result = await run(command === null
             ? ['voxtype', 'config', 'unset', CLEANUP_COMMAND_KEY]
-            : ['voxtype', 'config', 'set', CLEANUP_COMMAND_KEY, command]);
+            : ['voxtype', 'config', 'set', CLEANUP_COMMAND_KEY, fillPrompt(command, settings.get_string('cleanup-prompt'))]);
 
         if (!result.ok) {
             showToast(window, `Could not change text cleanup: ${firstLine(result.stderr)}`);
@@ -94,11 +81,28 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
     };
 
     const names = ollamaModels.map(model => model.name);
-    const commandRow = new Adw.EntryRow({
-        title: 'Cleanup command',
-        text: configured || settings.get_string('cleanup-command'),
-        show_apply_button: true,
+    const commandHint = buildHint();
+    const commandArea = buildTextArea('Cleanup command', commandHint, command => setCommand(command));
+    const { command: loaded, moved } = loadCommand(settings, configured);
+    commandArea.set(loaded);
+    // voxtype's copy still points at a script that is gone.
+    if (moved && configured !== '') {
+        save(loaded);
+    }
+
+    const examples: Record<string, string> = {
+        claude: claudeCleanupCommand(),
+        codex: codexCleanupCommand(),
+        ollama: cleanupCommand(names[0] ?? EXAMPLE_OLLAMA_MODEL),
+    };
+    commandHint.use_markup = true;
+    commandHint.label = `${COMMAND_HINT} ${EXAMPLE_LINKS}`;
+    // Only fills in the area, so nothing changes until it is applied.
+    commandHint.connect('activate-link', (_label, uri: string) => {
+        commandArea.fill(examples[uri]);
+        return true;
     });
+
     const enableRow = new Adw.SwitchRow({
         title: 'Clean up dictation',
         subtitle: 'Using your own model, run the command below after dictation to clean up the result. This will not work with live transcription.',
@@ -118,29 +122,40 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
         }
 
         const enabling = enableRow.active;
-        const command = commandRow.text.trim() || (names.length > 0 ? cleanupCommand(names[0]) : '');
+        const command = commandArea.text() || (names.length > 0 ? cleanupCommand(names[0]) : '');
         if (enabling && command === '') {
             showToast(window, 'Enter a cleanup command first');
             setEnabled(false);
             return;
         }
 
-        commandRow.text = enabling ? command : commandRow.text;
-        settings.set_string('cleanup-command', commandRow.text.trim());
+        if (enabling) {
+            commandArea.set(command);
+        }
+        settings.set_string('cleanup-command', commandArea.text());
         if (!await save(enabling ? command : null)) {
             setEnabled(!enabling);
         }
     });
 
-    const promptRow = buildPromptRow(prompt => {
-        commandRow.text = withCleanupPrompt(commandRow.text.trim(), prompt);
-        return setCommand(commandRow.text);
+    const promptArea = buildTextArea('LLM prompt', null, prompt => {
+        // A blank prompt goes back to the default, as a command with an empty one would do nothing useful.
+        if (prompt === '') {
+            settings.reset('cleanup-prompt');
+        } else {
+            settings.set_string('cleanup-prompt', prompt);
+        }
+        promptArea.set(settings.get_string('cleanup-prompt'));
+
+        const command = commandArea.text();
+        commandArea.set(command);
+        return setCommand(command);
     });
+    promptArea.set(settings.get_string('cleanup-prompt'));
 
     // Kept apart from the switch, because the Cleanup Hotkey uses the command with dictation cleanup off.
     const setCommand = async (command: string) => {
         settings.set_string('cleanup-command', command);
-        promptRow.show(command);
         if (command === '') {
             enableRow.active = false;
         } else if (enableRow.active) {
@@ -148,11 +163,9 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
         }
     };
 
-    commandRow.connect('apply', () => setCommand(commandRow.text.trim()));
-
     const useClaude = () => {
-        commandRow.text = claudeCleanupCommand(extensionPath);
-        return setCommand(commandRow.text);
+        commandArea.set(examples.claude);
+        return setCommand(examples.claude);
     };
 
     group.add(enableRow);
@@ -160,7 +173,7 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
     // A shortcut for anyone who already runs Ollama; it only fills in the command.
     if (names.length > 0) {
         const sizes = new Map(ollamaModels.map(model => [model.name, model.size]));
-        const currentModel = cleanupModel(commandRow.text);
+        const currentModel = cleanupModel(commandArea.text());
         const values = currentModel === null ? [null, ...names] : names.includes(currentModel) ? names : [currentModel, ...names];
         const modelRow = new Adw.ComboRow({
             title: 'Ollama model',
@@ -178,83 +191,60 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
                 return;
             }
 
-            commandRow.text = cleanupCommand(name);
-            settings.set_string('cleanup-command', commandRow.text);
-            promptRow.show(commandRow.text);
+            const command = cleanupCommand(name);
+            commandArea.set(command);
+            settings.set_string('cleanup-command', command);
             if (enableRow.active) {
-                save(commandRow.text);
+                save(command);
             }
         });
         group.add(modelRow);
     }
 
-    promptRow.show(commandRow.text.trim());
-    group.add(promptRow.row);
-    group.add(commandRow);
-    group.add(buildCommandHint(commandRow, {
-        claude: claudeCleanupCommand(extensionPath),
-        codex: codexCleanupCommand(),
-        ollama: cleanupCommand(names[0] ?? EXAMPLE_OLLAMA_MODEL),
-    }));
+    group.add(promptArea.row);
+    group.add(commandArea.row);
 
     return {
         group,
         useClaudeIfEmpty: () => {
-            if (commandRow.text.trim() === '') {
+            if (commandArea.text() === '') {
                 useClaude();
             }
         },
     };
 }
 
-// Sits right under the command, as it is the last row. A link only fills in the row, so nothing
-// changes until it is applied.
-function buildCommandHint(commandRow: Adw.EntryRow, examples: Record<string, string>): Gtk.Label {
-    const fill = buildUndoableFill(commandRow);
-    const label = buildSummaryLabel();
-    label.use_markup = true;
-    label.label = `${COMMAND_HINT}\n${EXAMPLE_LINKS}`;
-    label.connect('activate-link', (_label, uri: string) => {
-        fill(examples[uri]);
-        return true;
-    });
-    return label;
+// The command as typed, with $prompt in it. It only differs from voxtype's when that was edited by
+// hand, or still uses the old wrapper, in which case it moves to Claude Code directly.
+function loadCommand(settings: Gio.Settings, configured: string): { command: string; moved: boolean } {
+    const kept = settings.get_string('cleanup-command');
+    const handEdited = configured !== '' && fillPrompt(kept, settings.get_string('cleanup-prompt')) !== configured;
+    const command = handEdited ? configured : kept;
+
+    const replaced = replaceOldWrapper(command);
+    if (replaced === null) {
+        return { command, moved: false };
+    }
+    if (replaced.prompt !== null) {
+        settings.set_string('cleanup-prompt', replaced.prompt);
+    }
+    settings.set_string('cleanup-command', replaced.command);
+    return { command: replaced.command, moved: true };
 }
 
-// Setting a row's text wipes GTK's undo history, and the way around that takes two presses of Ctrl+Z
-// with an empty row in between. So this keeps what the first fill replaced and restores it in one.
-function buildUndoableFill(row: Adw.EntryRow): (text: string) => void {
-    let replaced: string | null = null;
-    let filled = '';
-
-    const keys = new Gtk.EventControllerKey({ propagation_phase: Gtk.PropagationPhase.CAPTURE });
-    keys.connect('key-pressed', (_controller, keyval: number, _keycode: number, state: Gdk.ModifierType) => {
-        const mask = state & Gtk.accelerator_get_default_mod_mask() & ~Gdk.ModifierType.LOCK_MASK;
-        if (replaced === null || row.text !== filled || mask !== Gdk.ModifierType.CONTROL_MASK || Gdk.keyval_to_lower(keyval) !== Gdk.KEY_z) {
-            return Gdk.EVENT_PROPAGATE;
-        }
-
-        row.text = replaced;
-        row.set_position(-1);
-        replaced = null;
-        return Gdk.EVENT_STOP;
-    });
-    row.add_controller(keys);
-
-    return text => {
-        if (replaced === null || row.text !== filled) {
-            replaced = row.text;
-        }
-        filled = text;
-        row.text = text;
-        row.grab_focus();
-        row.set_position(-1);
-    };
+function buildHint(): Gtk.Label {
+    return new Gtk.Label({ xalign: 0, wrap: true, css_classes: ['dim-label', 'caption'] });
 }
 
-// The prompt lives in the command as --prompt, so a hand edit to voxtype's config shows up here too.
-function buildPromptRow(onApply: (prompt: string) => void): { row: Adw.PreferencesRow; show: (command: string) => void } {
-    const hint = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ['dim-label', 'caption'] });
+type TextArea = {
+    row: Adw.PreferencesRow;
+    text: () => string;
+    set: (text: string) => void;
+    fill: (text: string) => void;
+};
+
+// A titled box of text with an apply button, any hint below it, and a scrollbar past three lines.
+function buildTextArea(title: string, hint: Gtk.Label | null, onApply: (text: string) => void): TextArea {
     const applyButton = new Gtk.Button({
         icon_name: 'object-select-symbolic',
         tooltip_text: 'Apply',
@@ -263,36 +253,61 @@ function buildPromptRow(onApply: (prompt: string) => void): { row: Adw.Preferenc
         css_classes: ['suggested-action', 'circular'],
     });
     const header = new Gtk.Box({ spacing: 12 });
-    header.append(new Gtk.Label({ label: 'LLM prompt', xalign: 0, hexpand: true }));
+    header.append(new Gtk.Label({ label: title, xalign: 0, hexpand: true }));
     header.append(applyButton);
 
-    const view = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, accepts_tab: false, top_margin: 6, bottom_margin: 6, left_margin: 8, right_margin: 8 });
-    const scroller = new Gtk.ScrolledWindow({ child: view, hscrollbar_policy: Gtk.PolicyType.NEVER, min_content_height: PROMPT_LINES_HEIGHT, max_content_height: PROMPT_LINES_HEIGHT });
+    const view = new Gtk.TextView({ wrap_mode: Gtk.WrapMode.WORD_CHAR, accepts_tab: false, left_margin: 8, right_margin: 8 });
+    // The padding goes around the scroller and not on the view, where a fourth line would show
+    // through it. The scrollbar doesn't overlay, as that kind hides until the pointer moves over it.
+    const scroller = new Gtk.ScrolledWindow({
+        child: view,
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        overlay_scrolling: false,
+        css_classes: ['voxtype-text-area'],
+        margin_top: TEXT_AREA_MARGIN,
+        margin_bottom: TEXT_AREA_MARGIN,
+    });
+    // Measured once on screen, when the font is known, so this stays three lines at any text size.
+    view.connect('map', () => {
+        [, scroller.height_request] = view.create_pango_layout(Array(TEXT_AREA_LINES).fill('A').join('\n')).get_pixel_size();
+    });
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 10, margin_bottom: 12, margin_start: 12, margin_end: 12 });
     box.append(header);
-    box.append(new Gtk.Frame({ child: scroller }));
-    box.append(hint);
+    box.append(new Gtk.Frame({ child: scroller, css_classes: ['view'] }));
+    if (hint !== null) {
+        box.append(hint);
+    }
 
+    const buffer = view.buffer;
     let saved = '';
-    view.buffer.connect('changed', () => {
-        applyButton.visible = view.buffer.text !== saved;
-    });
-    applyButton.connect('clicked', () => {
-        saved = view.buffer.text.trim();
-        applyButton.visible = false;
-        onApply(saved);
+    buffer.connect('changed', () => {
+        applyButton.visible = buffer.text.trim() !== saved;
     });
 
-    const row = new Adw.PreferencesRow({ title: 'LLM prompt', activatable: false, child: box });
+    const set = (text: string) => {
+        saved = text;
+        buffer.text = text;
+        applyButton.visible = false;
+    };
+    applyButton.connect('clicked', () => {
+        const text = buffer.text.trim();
+        set(text);
+        onApply(text);
+    });
+
     return {
-        row,
-        show: command => {
-            const prompt = cleanupPrompt(command);
-            saved = prompt ?? '';
-            view.buffer.text = saved;
-            view.sensitive = prompt !== null;
-            hint.label = prompt === null ? NO_PROMPT_HINT : PROMPT_HINT;
+        row: new Adw.PreferencesRow({ title, activatable: false, child: box }),
+        text: () => buffer.text.trim(),
+        set,
+        // One user action, so a single Ctrl+Z brings back what was there. Setting buffer.text can't be undone.
+        fill: text => {
+            const [start, end] = buffer.get_bounds();
+            buffer.begin_user_action();
+            buffer.delete(start, end);
+            buffer.insert(start, text, -1);
+            buffer.end_user_action();
+            view.grab_focus();
         },
     };
 }
@@ -351,7 +366,8 @@ function buildAnythingGroup(window: Adw.PreferencesWindow, settings: Gio.Setting
     group.add(lengthRow);
 
     const help = buildSummaryLabel();
-    help.label = LEFT_ALONE_HELP;
+    help.margin_top = 10;
+    help.label = REJECT_HELP;
     group.add(help);
 
     return group;

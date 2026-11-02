@@ -61,7 +61,6 @@ describe('Voxtype OSD in a headless GNOME Shell', { skip: !hasGnomeShell && 'gno
         }
         cpSync(join(ROOT, 'schemas'), join(extensionDir(), 'schemas'), { recursive: true });
         cpSync(join(ROOT, 'icons'), join(extensionDir(), 'icons'), { recursive: true });
-        cpSync(join(ROOT, 'bin'), join(extensionDir(), 'bin'), { recursive: true });
         execFileSync('glib-compile-schemas', [join(extensionDir(), 'schemas')]);
         cpSync(join(ROOT, 'test', 'shell', 'helper'), path('data', 'gnome-shell', 'extensions', HELPER_UUID), { recursive: true });
 
@@ -763,11 +762,31 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             assertNoErrors();
         });
 
-        test('runs the bundled wrapper through to Claude Code', async () => {
-            await prepare(`python3 '${join(extensionDir(), 'bin', 'voxtype-cleanup.py')}' --model sonnet --effort high --prompt 'Don'\\''t shout: $text'`);
+        test('runs the Claude Code example', async () => {
+            const { claudeCleanupCommand } = await import(join(ROOT, 'build', 'prefs', 'models.js'));
+            await prepare(claudeCleanupCommand());
             doubleTap();
             await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced', 10000);
             await finished();
+            assertNoErrors();
+        });
+
+        test('leaves the field alone when any command adds a link', async () => {
+            await prepare("cat; echo ' https://evil.example'");
+            doubleTap();
+            await started();
+            await finished();
+            assert.equal(field(), FIELD);
+            assertNoErrors();
+        });
+
+        test('fills in $prompt when dictation cleanup is off', async () => {
+            setSetting('cleanup-prompt', "don't panic");
+            await prepare('printf "%s" $prompt');
+            doubleTap();
+            await waitUntil(() => field() === "don't panic", 'the field to be replaced');
+            await finished();
+            resetSetting('cleanup-prompt');
             assertNoErrors();
         });
 

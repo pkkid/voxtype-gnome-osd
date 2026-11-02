@@ -6,7 +6,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import { chooseClipboardType, configValue, DoubleTap, isTerminal, restoreOuterSpace } from './cleanupRules.js';
+import { addsLink, chooseClipboardType, configValue, DoubleTap, fillPrompt, isTerminal, restoreOuterSpace } from './cleanupRules.js';
 import { firstLine, run, runLimited } from './voxtype.js';
 
 const shell = Shell.Global.get();
@@ -176,6 +176,9 @@ export class CleanupAnything {
         if (result.stdout.trim() === '') {
             throw new LeftAlone('the cleanup command returned nothing.');
         }
+        if (addsLink(text, cleaned)) {
+            throw new LeftAlone('the cleanup added a link or email address.');
+        }
 
         // Cleanup takes a few seconds, and the person may have moved on or kept typing since.
         if (await this.copyField(window, job) !== text) {
@@ -191,9 +194,11 @@ export class CleanupAnything {
 
     private async findCommand(): Promise<{ command: string | null; timeoutMs: number }> {
         const [command, timeout] = await Promise.all([run(['voxtype', 'config', 'get', COMMAND_KEY]), run(['voxtype', 'config', 'get', TIMEOUT_KEY])]);
+        // What voxtype has is already filled in. What is kept here while dictation cleanup is off is not.
+        const kept = configValue(this.settings.get_string('cleanup-command'));
 
         return {
-            command: (command.ok ? configValue(command.stdout) : null) ?? configValue(this.settings.get_string('cleanup-command')),
+            command: (command.ok ? configValue(command.stdout) : null) ?? (kept === null ? null : fillPrompt(kept, this.settings.get_string('cleanup-prompt'))),
             timeoutMs: (timeout.ok ? Number(configValue(timeout.stdout)) : 0) || DEFAULT_TIMEOUT_MS,
         };
     }

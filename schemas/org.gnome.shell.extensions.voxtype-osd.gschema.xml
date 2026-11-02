@@ -41,7 +41,12 @@
     <key name="cleanup-command" type="s">
       <default>''</default>
       <summary>Last text cleanup command</summary>
-      <description>Kept here so that turning text cleanup off, which removes it from the voxtype config, does not lose it.</description>
+      <description>As typed, with $prompt not yet filled in. Kept here so that turning text cleanup off, which removes it from the voxtype config, does not lose it.</description>
+    </key>
+    <key name="cleanup-prompt" type="s">
+      <default>'Clean up this text. Fix spelling, grammar and punctuation, and remove filler words like um and uh. Output only the cleaned text, with no quotes, notes or emojis:'</default>
+      <summary>LLM prompt for text cleanup</summary>
+      <description>Replaces $prompt in the cleanup command.</description>
     </key>
     <key name="cleanup-anything-enabled" type="b">
       <default>false</default>

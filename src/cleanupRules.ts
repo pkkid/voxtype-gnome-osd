@@ -3,6 +3,11 @@
 // Longest pause between the two taps of a double tap.
 const TAP_GAP_MS = 350;
 
+const PROMPT_WORD = '$prompt';
+const LINKS = /(?:\w+:\/\/|www\.)\S+|\S+@\S+\.\w+/gi;
+// Punctuation fixes often land right after a link, and that doesn't make it a new one.
+const LINK_END = /[.,;:!?)\]}'"]+$/;
+
 // Ctrl+C interrupts whatever a terminal is running instead of copying, so they are left alone.
 const TERMINALS = /gnome-terminal|org\.gnome\.(console|ptyxis)|ptyxis|^kgx$|^kitty$|alacritty|^foot|ghostty|wezterm|konsole|tilix|terminator|xterm|urxvt|blackbox|contour|warp/i;
 
@@ -36,6 +41,41 @@ export function restoreOuterSpace(original: string, cleaned: string): string {
     const start = original.length - original.trimStart().length;
     const end = original.trimEnd().length;
     return original.slice(0, start) + cleaned.trim() + original.slice(end);
+}
+
+function findLinks(text: string): Set<string> {
+    return new Set((text.match(LINKS) ?? []).map(link => link.replace(LINK_END, '').toLowerCase()));
+}
+
+// A cleanup has no reason to add a link or address, so one came from the model and not the person.
+export function addsLink(original: string, cleaned: string): boolean {
+    const known = findLinks(original);
+    return [...findLinks(cleaned)].some(link => !known.has(link));
+}
+
+// Puts the prompt where a command says $prompt. voxtype runs the command itself and knows nothing of
+// $prompt, so this has to happen before it gets there. The prompt is quoted to suit the spot it lands
+// in, so it stays one word and a shell never acts on what is in it.
+export function fillPrompt(command: string, prompt: string): string {
+    const single = prompt.replace(/'/g, `'\\''`);
+    const double = prompt.replace(/[\\"$`]/g, '\\$&');
+    let filled = '';
+    let quote = '';
+
+    for (let index = 0; index < command.length; index += 1) {
+        const char = command[index];
+
+        if (char === '\\' && quote !== "'") {
+            filled += char + (command[++index] ?? '');
+        } else if (command.startsWith(PROMPT_WORD, index) && !/\w/.test(command[index + PROMPT_WORD.length] ?? '')) {
+            filled += quote === "'" ? single : quote === '"' ? double : `'${single}'`;
+            index += PROMPT_WORD.length - 1;
+        } else {
+            quote = quote === '' && (char === "'" || char === '"') ? char : char === quote ? '' : quote;
+            filled += char;
+        }
+    }
+    return filled;
 }
 
 // `voxtype config get` prints null for a value that is not set.
