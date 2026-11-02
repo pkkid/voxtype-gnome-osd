@@ -22,8 +22,8 @@ text in any app.
 - **Models:** download, compare and switch models. The extension sets up the voxtype build each one
   needs, and asks for your password when it has to.
 - **Text cleanup:** runs dictated text through a command, such as an Ollama model or your installed
-  Claude Code.
-- **Cleanup Anything:** cleans up the text field you are in, in any app.
+  Claude Code or Codex.
+- **Cleanup Hotkey:** cleans up the text field you are in, in any app.
 
 <br clear="right">
 
@@ -35,19 +35,21 @@ text in any app.
 
 Open Settings from the panel menu, or with `gnome-extensions prefs voxtype-osd@theoodawara`.
 
-## Cleanup Anything
+## Cleanup Hotkey
 
 Off by default. Turn it on from the Cleanup page, then double tap Left Ctrl or press your own shortcut.
 It selects the whole field, runs your cleanup command, pastes the result and puts your clipboard back.
-Press the trigger again to cancel, or Ctrl+Z to undo.
+Press the trigger again to cancel. Undo depends on the app, so don't count on Ctrl+Z.
 
 - The whole field goes to whatever service your command uses.
 - Your text is left alone if the command fails, the field changes or you move to another window.
 - Terminals are skipped, but a terminal inside another app, like VS Code's, can't be detected.
 - Rich text on your clipboard comes back as plain text.
 
-The Claude Code option runs with every tool off and rejects replies that are more than a light edit.
-It can't judge meaning, so read the result before you send it.
+The Claude Code example runs with every tool off and rejects replies that are more than a light edit.
+It can't judge meaning, so read the result before you send it. The other commands have no such checks.
+The Codex example can't change files, but Codex can't turn its tools off, so text you clean up could
+trick it into reading files and pasting out what it finds.
 
 ## Requirements
 

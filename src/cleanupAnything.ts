@@ -15,7 +15,7 @@ function inNormalMode(): boolean {
     return (Main.actionMode as Shell.ActionMode) === Shell.ActionMode.NORMAL;
 }
 
-const TITLE = 'Cleanup Anything';
+const TITLE = 'Cleanup Hotkey';
 const COMMAND_KEY = 'output.post_process.command';
 const TIMEOUT_KEY = 'output.post_process.timeout_ms';
 const DEFAULT_TIMEOUT_MS = 30000;

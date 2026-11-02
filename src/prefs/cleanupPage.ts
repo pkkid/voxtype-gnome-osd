@@ -4,7 +4,8 @@ import Gio from 'gi://Gio';
 import Gtk from 'gi://Gtk';
 
 import { firstLine, run } from '../voxtype.js';
-import { claudeCleanupCommand, cleanupCommand, cleanupModel, cleanupPrompt, OllamaModel, parseOllamaList, withCleanupPrompt } from './models.js';
+import { buildSummaryLabel } from './memory.js';
+import { claudeCleanupCommand, cleanupCommand, cleanupModel, cleanupPrompt, codexCleanupCommand, OllamaModel, parseOllamaList, withCleanupPrompt } from './models.js';
 import { isUsableShortcut } from './shortcut.js';
 import { loadSchema, restartIfRunning } from './voxtypeConfig.js';
 import { showToast } from './window.js';
@@ -15,6 +16,27 @@ const PROMPT_LINES_HEIGHT = 88;
 const PROMPT_HINT = 'Write $text where your text goes. If you leave it out, the text goes after the prompt.';
 const NO_PROMPT_HINT = 'Only the Claude Code command takes a prompt. Other commands carry their own.';
 const TRIGGERS = [['double-ctrl', 'Double-tap Left Ctrl'], ['shortcut', 'Custom shortcut']];
+const EXAMPLE_OLLAMA_MODEL = 'llama3.2';
+const COMMAND_HINT = 'Runs after dictation, or when you use the Cleanup Hotkey below. It reads the text on stdin and prints the result.';
+const EXAMPLE_LINKS = 'Examples: '
+    + '<a href="claude" title="Uses your installed Claude Code with every tool off. Set the model and reasoning level with --model and --effort. Needs Python 3, and Claude Code signed in.">Claude Code</a>, '
+    + '<a href="codex" title="Uses your installed Codex. It can not change files, but it can still run read-only commands, so text you clean up could trick it into pasting out what it reads.">Codex</a>, '
+    + '<a href="ollama" title="Uses a local model through Ollama. Pick one of yours in place of the model name.">Ollama</a>';
+// Matches the checks in bin/voxtype-cleanup.py and CleanupAnything.replaceField().
+const LEFT_ALONE_HELP = `Your text is left alone if:
+\u2022 it is empty, or over the Longest text limit
+\u2022 it is in a terminal
+\u2022 the command fails, times out or returns nothing
+\u2022 it changes while the command runs
+\u2022 you move to another window or cancel
+
+With the Claude Code example, a reply is also rejected if it:
+\u2022 adds lines
+\u2022 adds a link or email address
+\u2022 drops more than half of the original
+\u2022 is more than 30% new text
+
+Other commands have no such checks, so whatever they print is pasted in.`;
 
 // Fills in once voxtype has answered, so the window opens straight away.
 export function buildCleanupPage(window: Adw.PreferencesWindow, settings: Gio.Settings, extensionPath: string): Adw.PreferencesPage {
@@ -52,10 +74,7 @@ async function fillCleanupPage(window: Adw.PreferencesWindow, page: Adw.Preferen
 }
 
 function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings, ollamaModels: OllamaModel[], configured: string, extensionPath: string): { group: Adw.PreferencesGroup; useClaudeIfEmpty: () => void } {
-    const group = new Adw.PreferencesGroup({
-        title: 'Text cleanup',
-        description: 'Runs your text through a command, such as a script that calls a language model. The command reads the text on stdin and prints the result. Dictation cleanup does not work with live transcription, which types text before cleanup can see it.',
-    });
+    const group = new Adw.PreferencesGroup();
 
     const save = async (command: string | null): Promise<boolean> => {
         const result = await run(command === null
@@ -80,7 +99,11 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
         text: configured || settings.get_string('cleanup-command'),
         show_apply_button: true,
     });
-    const enableRow = new Adw.SwitchRow({ title: 'Clean up dictation', active: configured !== '' });
+    const enableRow = new Adw.SwitchRow({
+        title: 'Clean up dictation',
+        subtitle: 'Using your own model, run the command below after dictation to clean up the result. This will not work with live transcription.',
+        active: configured !== '',
+    });
 
     let syncing = false;
     const setEnabled = (enabled: boolean) => {
@@ -114,7 +137,7 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
         return setCommand(commandRow.text);
     });
 
-    // Kept apart from the switch, because Cleanup Anything uses the command with dictation cleanup off.
+    // Kept apart from the switch, because the Cleanup Hotkey uses the command with dictation cleanup off.
     const setCommand = async (command: string) => {
         settings.set_string('cleanup-command', command);
         promptRow.show(command);
@@ -165,18 +188,14 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
         group.add(modelRow);
     }
 
-    const claudeRow = new Adw.ActionRow({
-        title: 'Use Claude Code',
-        subtitle: 'Sets the command to one that uses your installed Claude Code with every tool turned off, and rejects replies that are more than a light edit. The model and reasoning level are the --model and --effort options in the command. Needs Python 3, and Claude Code installed and signed in.',
-    });
-    const claudeButton = new Gtk.Button({ label: 'Use', valign: Gtk.Align.CENTER });
-    claudeButton.connect('clicked', useClaude);
-    claudeRow.add_suffix(claudeButton);
-    group.add(claudeRow);
-
-    group.add(commandRow);
     promptRow.show(commandRow.text.trim());
     group.add(promptRow.row);
+    group.add(commandRow);
+    group.add(buildCommandHint(commandRow, {
+        claude: claudeCleanupCommand(extensionPath),
+        codex: codexCleanupCommand(),
+        ollama: cleanupCommand(names[0] ?? EXAMPLE_OLLAMA_MODEL),
+    }));
 
     return {
         group,
@@ -185,6 +204,51 @@ function buildCleanupGroup(window: Adw.PreferencesWindow, settings: Gio.Settings
                 useClaude();
             }
         },
+    };
+}
+
+// Sits right under the command, as it is the last row. A link only fills in the row, so nothing
+// changes until it is applied.
+function buildCommandHint(commandRow: Adw.EntryRow, examples: Record<string, string>): Gtk.Label {
+    const fill = buildUndoableFill(commandRow);
+    const label = buildSummaryLabel();
+    label.use_markup = true;
+    label.label = `${COMMAND_HINT}\n${EXAMPLE_LINKS}`;
+    label.connect('activate-link', (_label, uri: string) => {
+        fill(examples[uri]);
+        return true;
+    });
+    return label;
+}
+
+// Setting a row's text wipes GTK's undo history, and the way around that takes two presses of Ctrl+Z
+// with an empty row in between. So this keeps what the first fill replaced and restores it in one.
+function buildUndoableFill(row: Adw.EntryRow): (text: string) => void {
+    let replaced: string | null = null;
+    let filled = '';
+
+    const keys = new Gtk.EventControllerKey({ propagation_phase: Gtk.PropagationPhase.CAPTURE });
+    keys.connect('key-pressed', (_controller, keyval: number, _keycode: number, state: Gdk.ModifierType) => {
+        const mask = state & Gtk.accelerator_get_default_mod_mask() & ~Gdk.ModifierType.LOCK_MASK;
+        if (replaced === null || row.text !== filled || mask !== Gdk.ModifierType.CONTROL_MASK || Gdk.keyval_to_lower(keyval) !== Gdk.KEY_z) {
+            return Gdk.EVENT_PROPAGATE;
+        }
+
+        row.text = replaced;
+        row.set_position(-1);
+        replaced = null;
+        return Gdk.EVENT_STOP;
+    });
+    row.add_controller(keys);
+
+    return text => {
+        if (replaced === null || row.text !== filled) {
+            replaced = row.text;
+        }
+        filled = text;
+        row.text = text;
+        row.grab_focus();
+        row.set_position(-1);
     };
 }
 
@@ -235,8 +299,8 @@ function buildPromptRow(onApply: (prompt: string) => void): { row: Adw.Preferenc
 
 function buildAnythingGroup(window: Adw.PreferencesWindow, settings: Gio.Settings, useClaudeIfEmpty: () => void): Adw.PreferencesGroup {
     const group = new Adw.PreferencesGroup({
-        title: 'Cleanup Anything',
-        description: 'Not a Voxtype feature. Cleans up the text field you are in, in any app: it selects everything in the field, runs the command above and pastes the result over it. The whole field goes to whatever service your command uses, so changing the command changes where it goes and what that service can do. Your clipboard is put back as plain text or an image, Ctrl+Z undoes the change in most apps, and terminals are skipped.',
+        title: 'Cleanup Hotkey',
+        description: 'Cleans up the text field you are in, in any app. It selects the whole field, runs the command above and pastes the result. The whole field goes to whatever service that command uses. Undo depends on the app, so check the result.',
     });
 
     const enableRow = new Adw.SwitchRow({ title: 'Clean up anywhere' });
@@ -286,12 +350,16 @@ function buildAnythingGroup(window: Adw.PreferencesWindow, settings: Gio.Setting
     settings.bind('cleanup-anything-max-chars', lengthRow, 'value', Gio.SettingsBindFlags.DEFAULT);
     group.add(lengthRow);
 
+    const help = buildSummaryLabel();
+    help.label = LEFT_ALONE_HELP;
+    group.add(help);
+
     return group;
 }
 
 function captureShortcut(window: Adw.PreferencesWindow, onCaptured: (accelerator: string) => void): void {
     const dialog = new Adw.AlertDialog({
-        heading: 'Set Cleanup Anything shortcut',
+        heading: 'Set Cleanup Hotkey shortcut',
         body: 'Press the new key combination.\nEsc cancels.',
     });
     dialog.add_response('cancel', 'Cancel');

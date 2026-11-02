@@ -372,6 +372,12 @@ export function claudeCleanupCommand(extensionPath: string): string {
     return `python3 ${shellQuote(`${extensionPath}/${CLEANUP_WRAPPER}`)} --model haiku --effort low --prompt ${shellQuote(DEFAULT_CLEANUP_PROMPT)}`;
 }
 
+// Runs from /tmp without the user's own config, so their hooks and project notes stay out of it.
+// Autostarted services may not have ~/.local/bin on PATH.
+export function codexCleanupCommand(): string {
+    return `PATH="$PATH:$HOME/.local/bin" codex exec --cd /tmp --ignore-user-config --ignore-rules --skip-git-repo-check --ephemeral --sandbox read-only --color never -c model_reasoning_effort=low ${shellQuote(CLEANUP_PROMPT)}`;
+}
+
 // The prompt the wrapper in a cleanup command uses, or null for a command that takes no prompt, or
 // one this cannot safely rewrite, like a pipeline.
 export function cleanupPrompt(command: string): string | null {

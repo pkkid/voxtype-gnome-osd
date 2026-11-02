@@ -53,16 +53,16 @@
         <choice value="shortcut"/>
       </choices>
       <default>'double-ctrl'</default>
-      <summary>What starts Cleanup Anything</summary>
+      <summary>What starts the Cleanup Hotkey</summary>
     </key>
     <key name="cleanup-anything-shortcut" type="as">
       <default><![CDATA[['<Super><Alt>c']]]></default>
-      <summary>Shortcut for Cleanup Anything</summary>
+      <summary>Shortcut for the Cleanup Hotkey</summary>
     </key>
     <key name="cleanup-anything-max-chars" type="i">
       <range min="500" max="50000"/>
       <default>8000</default>
-      <summary>Longest text Cleanup Anything will send</summary>
+      <summary>Longest text the Cleanup Hotkey will send</summary>
       <description>Also guards against Ctrl+A selecting a whole page or document.</description>
     </key>
     <key name="pill-x" type="d">

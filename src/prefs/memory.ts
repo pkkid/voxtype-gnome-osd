@@ -104,7 +104,7 @@ function buildFolderSummary(modelsDir: string, modelsBytes: number): Gtk.Label {
     return label;
 }
 
-function buildSummaryLabel(): Gtk.Label {
+export function buildSummaryLabel(): Gtk.Label {
     return new Gtk.Label({
         xalign: 0,
         wrap: true,

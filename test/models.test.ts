@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import {
     claudeCleanupCommand,
+    codexCleanupCommand,
     cleanupCommand,
     cleanupModel,
     cleanupPrompt,
@@ -97,6 +98,15 @@ test('claudeCleanupCommand runs the wrapper from wherever the extension is insta
 
     assert.match(command, /^python3 '\/home\/o'\\''neil\/ext\/bin\/voxtype-cleanup\.py' --model haiku --effort low --prompt '/);
     assert.equal(cleanupPrompt(command), DEFAULT_CLEANUP_PROMPT);
+});
+
+test('codexCleanupCommand keeps Codex read-only and takes no prompt from the Settings window', () => {
+    const command = codexCleanupCommand();
+
+    assert.match(command, / codex exec /);
+    assert.match(command, / --sandbox read-only /);
+    assert.match(command, / --ignore-user-config /);
+    assert.equal(cleanupPrompt(command), null);
 });
 
 test('the default prompt matches the one in the wrapper', () => {

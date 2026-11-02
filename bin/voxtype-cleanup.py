@@ -136,7 +136,9 @@ def run_claude(message, options):
 
 
 def check_rewrite(original, rewritten, fence_id=''):
-    """ Returns why a reply is not a light edit of the original, or None if it is. """
+    """ Returns why a reply is not a light edit of the original, or None if it is.
+        The Cleanup page in Settings lists these rules, so keep it in step.
+    """
     if not rewritten.strip():
         return 'reply was empty'
     if fence_id and fence_id in rewritten:
