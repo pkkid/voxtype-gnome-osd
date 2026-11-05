@@ -11,7 +11,7 @@ const STOPPED_ICON_OPACITY = 115;
 
 const STATUS_LABELS: Record<DaemonState, string> = {
     unavailable: 'Voxtype is stopped',
-    idle: 'Voxtype is ready',
+    idle: 'Ready',
     recording: 'Dictating…',
     streaming: 'Dictating…',
     finishing: 'Finishing…',
@@ -37,6 +37,7 @@ export const PanelIndicator = GObject.registerClass(
         private declare syncingServiceItem: boolean;
         private declare showWhenStopped: boolean;
         private declare accentColor: string | null;
+        private declare microphone: string | null;
         declare leftClickToggles: boolean;
 
         _init() {
@@ -48,6 +49,7 @@ export const PanelIndicator = GObject.registerClass(
             this.showWhenStopped = true;
             this.leftClickToggles = false;
             this.accentColor = null;
+            this.microphone = null;
 
             this.icon = new St.Icon({ style_class: 'system-status-icon' });
             this.add_child(this.icon);
@@ -96,6 +98,12 @@ export const PanelIndicator = GObject.registerClass(
         setAccentColor(color: string) {
             this.accentColor = color;
             this.syncAccentColor();
+        }
+
+        // null while the sound server is not ready yet, '' when there is no input.
+        setMicrophone(name: string | null) {
+            this.microphone = name;
+            this.syncMenu();
         }
 
         setShowWhenStopped(show: boolean) {
@@ -158,6 +166,8 @@ export const PanelIndicator = GObject.registerClass(
                 this.statusItem.label.text = 'Starting Voxtype…';
             } else if (this.pendingServiceState === false) {
                 this.statusItem.label.text = 'Stopping Voxtype…';
+            } else if (this.state === 'idle' && this.microphone !== null) {
+                this.statusItem.label.text = `Ready, ${this.microphone || 'no microphone'}`;
             } else {
                 this.statusItem.label.text = STATUS_LABELS[this.state];
             }

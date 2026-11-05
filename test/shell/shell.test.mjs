@@ -271,7 +271,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assert.equal(state.extensionState, ACTIVE);
         assert.equal(state.indicator.visible, true);
         assert.equal(state.indicator.iconFile, 'voxtype-panel-symbolic.svg');
-        assert.equal(state.indicator.status, 'Voxtype is ready');
+        assert.match(state.indicator.status, /^Ready\b/);
         assert.ok(hidden(state), 'no indicator while idle');
         assertNoErrors();
     });
@@ -352,7 +352,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
         rmSync(path('bridge-mode'));
         writeState('idle', { atomic: true });
-        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the panel menu to go back');
+        await waitFor(s => /^Ready\b/.test(s.indicator.status), 'the panel menu to go back');
         resetSetting('show-pill');
         assertNoErrors();
     });
@@ -419,7 +419,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         writeState(null);
         await waitFor(s => s.indicator.status === 'Voxtype is stopped', 'the stopped state');
         writeState('idle');
-        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the ready state');
+        await waitFor(s => /^Ready\b/.test(s.indicator.status), 'the ready state');
         writeState('recording');
         await waitFor(shown, 'the indicator to appear');
         writeState('idle');
@@ -442,7 +442,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         helper('ToggleServiceSwitch');
         await waitUntil(() => calls().includes('systemd StartUnit voxtype.service'), 'the start command');
         writeState('idle');
-        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the ready state');
+        await waitFor(s => /^Ready\b/.test(s.indicator.status), 'the ready state');
         assert.deepEqual(calls(), ['systemd StopUnit voxtype.service', 'systemd StartUnit voxtype.service']);
 
         clearCalls();
@@ -489,7 +489,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         await waitFor(s => s.indicator.status === 'Voxtype is stopped', 'the stopped state');
         assert.equal(pressPanelIcon(1), false, 'a left press opens the menu while voxtype is stopped');
         writeState('idle');
-        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'the ready state');
+        await waitFor(s => /^Ready\b/.test(s.indicator.status), 'the ready state');
         resetSetting('left-click-toggles');
 
         assert.deepEqual(calls(), []);
@@ -542,7 +542,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
         assertNoErrors();
 
         await setEnabled(true);
-        await waitFor(s => s.indicator?.status === 'Voxtype is ready' && hidden(s), 'the extension to settle');
+        await waitFor(s => /^Ready\b/.test(s.indicator?.status) && hidden(s), 'the extension to settle');
         assertNoErrors();
     });
 
@@ -597,7 +597,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             resetSetting(key);
         }
         await setEnabled(true);
-        await waitFor(s => s.indicator?.status === 'Voxtype is ready', 'the extension to come back');
+        await waitFor(s => /^Ready\b/.test(s.indicator?.status), 'the extension to come back');
         assertNoErrors();
     });
 
@@ -636,7 +636,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
     test('reports a failing service change and clears the pending state', async () => {
         touch('systemd-fails');
         helper('ToggleServiceSwitch');
-        await waitFor(s => s.indicator.status === 'Voxtype is ready' && s.indicator.serviceSwitch === true, 'the menu to recover');
+        await waitFor(s => /^Ready\b/.test(s.indicator.status) && s.indicator.serviceSwitch === true, 'the menu to recover');
         const errors = newErrors();
         rmSync(path('systemd-fails'));
 
@@ -664,7 +664,7 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
 
         mkdirSync(path('runtime', 'voxtype'));
         writeState('idle');
-        await waitFor(s => s.indicator.status === 'Voxtype is ready', 'voxtype to be noticed', 15000);
+        await waitFor(s => /^Ready\b/.test(s.indicator.status), 'voxtype to be noticed', 15000);
         writeState('recording');
         await waitFor(shown, 'the indicator to appear');
         writeState('idle');

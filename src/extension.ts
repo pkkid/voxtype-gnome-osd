@@ -8,6 +8,7 @@ import { CleanupAnything } from './cleanupAnything.js';
 import { accentColor } from './color.js';
 import { DaemonState, DaemonStateWatcher, isRecording } from './daemonState.js';
 import { AudioSample, MicCloseDetector } from './levels.js';
+import { MicrophoneWatcher } from './microphone.js';
 import { OsdPill } from './osdPill.js';
 import { PanelIndicator } from './panelIndicator.js';
 import { setServiceRunning } from './systemd.js';
@@ -24,6 +25,7 @@ export default class VoxtypeOsdExtension extends Extension {
     private pill: OsdPill | null = null;
     private bridge: AudioBridge | null = null;
     private cleanup: CleanupAnything | null = null;
+    private microphone: MicrophoneWatcher | null = null;
     private state: DaemonState = 'unavailable';
     private micClose = new MicCloseDetector();
     private serviceTimeoutId = 0;
@@ -54,6 +56,9 @@ export default class VoxtypeOsdExtension extends Extension {
 
         this.bridge = new AudioBridge(sample => this.onSample(sample));
 
+        this.microphone = new MicrophoneWatcher(name => this.indicator?.setMicrophone(name));
+        this.microphone.start();
+
         this.settings.connectObject(
             'changed::left-click-toggles', () => this.applySettings(),
             'changed::show-when-stopped', () => this.applySettings(),
@@ -82,6 +87,9 @@ export default class VoxtypeOsdExtension extends Extension {
 
         this.bridge?.stop();
         this.bridge = null;
+
+        this.microphone?.stop();
+        this.microphone = null;
 
         this.pill?.destroy();
         this.pill = null;
