@@ -753,6 +753,31 @@ exec gnome-shell --headless --virtual-monitor ${MONITOR.join('x')}
             assertNoErrors();
         });
 
+        test('cleans up only the selected text when there is some', async () => {
+            await prepare('tr a-z A-Z');
+            helper('PressKeys', 'Control_L+End');
+            await sleep(300);
+            helper('PressKeys', 'Control_L+Shift_L+Left');
+            await sleep(300);
+            doubleTap();
+            await waitUntil(() => field() === 'hello WORLD', 'the selection to be replaced');
+            await finished();
+            assert.ok(!shortcuts().includes('a'), 'it selected the whole field');
+            assertNoErrors();
+        });
+
+        test('cleans up the whole field once the selection is gone', async () => {
+            await prepare('tr a-z A-Z');
+            helper('PressKeys', 'Control_L+Shift_L+Home');
+            await sleep(300);
+            helper('PressKeys', 'Control_L+End');
+            await sleep(300);
+            doubleTap();
+            await waitUntil(() => field() === 'HELLO WORLD', 'the field to be replaced');
+            await finished();
+            assertNoErrors();
+        });
+
         test('says it is cleaning up while the command runs', async () => {
             await prepare('sleep 1; tr a-z A-Z');
             doubleTap();

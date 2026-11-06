@@ -39,10 +39,11 @@ type SavedClipboard = { type: string; bytes: Uint8Array } | null;
 // Why the field was left alone. Told to the person rather than logged as a failure.
 class LeftAlone extends Error {}
 
-// Double tap Left Ctrl or press a shortcut: selects and copies the focused field, runs the cleanup
-// command over it, pastes the result over it and puts the clipboard back. Not a voxtype feature, but
-// it shares voxtype's cleanup command. Runs in the shell, so it can reach the clipboard and send keys
-// without tools like ydotool, and takes no notice of any key but its own trigger.
+// Double tap Left Ctrl or press a shortcut: copies the selected text, or selects and copies the whole
+// focused field when nothing is selected, runs the cleanup command over it, pastes the result over it
+// and puts the clipboard back. Not a voxtype feature, but it shares voxtype's cleanup command. Runs in
+// the shell, so it can reach the clipboard and send keys without tools like ydotool, and takes no
+// notice of any key but its own trigger.
 export class CleanupAnything {
     private readonly clipboard = St.Clipboard.get_default();
     private readonly doubleTap = new DoubleTap();
@@ -143,7 +144,7 @@ export class CleanupAnything {
     }
 
     private async replaceField(window: Meta.Window, job: Gio.Cancellable): Promise<void> {
-        const text = await this.copyField(window, job);
+        const { text, selectAll } = await this.copyText(window, job);
         if (job.is_cancelled()) {
             return;
         }
@@ -181,7 +182,7 @@ export class CleanupAnything {
         }
 
         // Cleanup takes a few seconds, and the person may have moved on or kept typing since.
-        if (await this.copyField(window, job) !== text) {
+        if (await this.copy(window, job, selectAll) !== text) {
             throw new LeftAlone('it changed while it was being cleaned up.');
         }
 
@@ -203,12 +204,29 @@ export class CleanupAnything {
         };
     }
 
-    private async copyField(window: Meta.Window, job: Gio.Cancellable): Promise<string> {
+    // The selected text when there is some, otherwise the whole field. Apps put what is selected on
+    // the primary selection, but some leave it there once the selection is gone, so a plain Ctrl+C has
+    // to copy the same text before it counts. Editors that copy the whole line when nothing is
+    // selected copy something else.
+    private async copyText(window: Meta.Window, job: Gio.Cancellable): Promise<{ text: string; selectAll: boolean }> {
+        const selected = await this.clipboardText(St.ClipboardType.PRIMARY);
+        if (selected.trim() !== '') {
+            const text = await this.copy(window, job, false);
+            if (text === selected || job.is_cancelled()) {
+                return { text, selectAll: false };
+            }
+        }
+        return { text: await this.copy(window, job, true), selectAll: true };
+    }
+
+    private async copy(window: Meta.Window, job: Gio.Cancellable, selectAll: boolean): Promise<string> {
         await this.waitForKeysUp(job);
         this.clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
         await this.sleep(POLL_MS);
-        this.press(window, job, Clutter.KEY_a);
-        await this.sleep(KEY_GAP_MS);
+        if (selectAll) {
+            this.press(window, job, Clutter.KEY_a);
+            await this.sleep(KEY_GAP_MS);
+        }
         this.press(window, job, Clutter.KEY_c);
 
         for (let waited = 0; waited < COPY_TIMEOUT_MS && !job.is_cancelled(); waited += POLL_MS) {
@@ -259,9 +277,9 @@ export class CleanupAnything {
         })]);
     }
 
-    private clipboardText(): Promise<string> {
+    private clipboardText(type = St.ClipboardType.CLIPBOARD): Promise<string> {
         return this.clipboardAnswer(new Promise(resolve => {
-            this.clipboard.get_text(St.ClipboardType.CLIPBOARD, (_clipboard, text) => resolve(text ?? ''));
+            this.clipboard.get_text(type, (_clipboard, text) => resolve(text ?? ''));
         }));
     }
 

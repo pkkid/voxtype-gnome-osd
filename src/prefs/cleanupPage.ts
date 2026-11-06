@@ -315,7 +315,7 @@ function buildTextArea(title: string, hint: Gtk.Label | null, onApply: (text: st
 function buildAnythingGroup(window: Adw.PreferencesWindow, settings: Gio.Settings, useClaudeIfEmpty: () => void): Adw.PreferencesGroup {
     const group = new Adw.PreferencesGroup({
         title: 'Cleanup Hotkey',
-        description: 'Cleans up the text field you are in, in any app. It selects the whole field, runs the command above and pastes the result. The whole field goes to whatever service that command uses. Undo depends on the app, so check the result.',
+        description: 'Cleans up the selected text, or the whole field you are in when nothing is selected, in any app. It runs the command above and pastes the result. That text goes to whatever service the command uses. Undo depends on the app, so check the result.',
     });
 
     const enableRow = new Adw.SwitchRow({ title: 'Clean up anywhere' });

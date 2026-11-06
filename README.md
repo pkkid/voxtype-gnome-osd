@@ -23,7 +23,7 @@ text in any app.
   needs, and asks for your password when it has to.
 - **Text cleanup:** runs dictated text through a command, such as an Ollama model or your installed
   Claude Code or Codex.
-- **Cleanup Hotkey:** cleans up the text field you are in, in any app.
+- **Cleanup Hotkey:** cleans up the selected text, or the text field you are in, in any app.
 
 <br clear="right">
 
@@ -38,10 +38,11 @@ Open Settings from the panel menu, or with `gnome-extensions prefs voxtype-osd@t
 ## Cleanup Hotkey
 
 Off by default. Turn it on from the Cleanup page, then double tap Left Ctrl or press your own shortcut.
-It selects the whole field, runs your cleanup command, pastes the result and puts your clipboard back.
+It cleans up the text you have selected, or the whole field when nothing is selected. It runs your
+cleanup command, pastes the result and puts your clipboard back.
 Press the trigger again to cancel. Undo depends on the app, so don't count on Ctrl+Z.
 
-- The whole field goes to whatever service your command uses.
+- The selected text or whole field goes to whatever service your command uses.
 - Your text is left alone if the command fails, the reply adds a link or email address, the field
   changes or you move to another window.
 - Terminals are skipped, but a terminal inside another app, like VS Code's, can't be detected.
